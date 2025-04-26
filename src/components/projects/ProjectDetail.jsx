@@ -17,6 +17,11 @@ const ProjectDetail = ({ project }) => {
   const assignedResources = resources.filter(
     resource => resource.allocation && resource.allocation.projectId === project.id
   );
+
+  // When the "Allocate Resources" button is clicked
+  const handleAddAllocation = () => {
+    setShowAllocationForm(true);
+  };
   
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -118,6 +123,7 @@ const ProjectDetail = ({ project }) => {
       
       {showAllocationForm && (
         <AllocationForm 
+          projectId={project.id}
           onClose={() => setShowAllocationForm(false)}
         />
       )}

@@ -18,7 +18,7 @@ exports.getAllResources = async (req, res) => {
         ORDER BY r.Name
       `);
     
-    // For each resource, get their skills
+    // For each resource, get their skills and allocations
     const resources = await Promise.all(result.recordset.map(async resource => {
       // Get skills
       const skillsResult = await pool.request()
@@ -30,8 +30,8 @@ exports.getAllResources = async (req, res) => {
           WHERE rs.ResourceID = @resourceId
         `);
       
-      // Get allocation
-      const allocationResult = await pool.request()
+      // Get allocations - Modified to get ALL allocations
+      const allocationsResult = await pool.request()
         .input('resourceId', sql.Int, resource.ResourceID)
         .query(`
           SELECT 
@@ -49,21 +49,45 @@ exports.getAllResources = async (req, res) => {
         `);
       
       // Format the response
-      return {
+      const formattedResource = {
         id: resource.ResourceID,
         name: resource.Name,
         role: resource.Role,
         email: resource.Email,
         phone: resource.Phone,
         skills: skillsResult.recordset.map(skill => skill.Name),
-        allocation: allocationResult.recordset.length > 0 ? {
-          projectId: allocationResult.recordset[0].ProjectID,
-          projectName: allocationResult.recordset[0].ProjectName,
-          startDate: allocationResult.recordset[0].StartDate,
-          endDate: allocationResult.recordset[0].EndDate,
-          utilization: allocationResult.recordset[0].Utilization
-        } : null
+        // Include ALL allocations as an array
+        allocations: allocationsResult.recordset.map(alloc => ({
+          id: alloc.AllocationID,
+          projectId: alloc.ProjectID,
+          project: {
+            id: alloc.ProjectID,
+            name: alloc.ProjectName
+          },
+          startDate: alloc.StartDate,
+          endDate: alloc.EndDate,
+          utilization: alloc.Utilization
+        }))
       };
+      
+      // For backwards compatibility - include the first allocation as 'allocation'
+      if (allocationsResult.recordset.length > 0) {
+        const primaryAlloc = allocationsResult.recordset[0];
+        formattedResource.allocation = {
+          projectId: primaryAlloc.ProjectID,
+          project: {
+            id: primaryAlloc.ProjectID,
+            name: primaryAlloc.ProjectName
+          },
+          startDate: primaryAlloc.StartDate,
+          endDate: primaryAlloc.EndDate,
+          utilization: primaryAlloc.Utilization
+        };
+      } else {
+        formattedResource.allocation = null;
+      }
+      
+      return formattedResource;
     }));
     
     res.json(resources);
@@ -112,8 +136,8 @@ exports.getResourceById = async (req, res) => {
         WHERE rs.ResourceID = @resourceId
       `);
     
-    // Get allocation
-    const allocationResult = await pool.request()
+    // Get allocations - Modified to get ALL allocations
+    const allocationsResult = await pool.request()
       .input('resourceId', sql.Int, resource.ResourceID)
       .query(`
         SELECT 
@@ -138,14 +162,36 @@ exports.getResourceById = async (req, res) => {
       email: resource.Email,
       phone: resource.Phone,
       skills: skillsResult.recordset.map(skill => skill.Name),
-      allocation: allocationResult.recordset.length > 0 ? {
-        projectId: allocationResult.recordset[0].ProjectID,
-        projectName: allocationResult.recordset[0].ProjectName,
-        startDate: allocationResult.recordset[0].StartDate,
-        endDate: allocationResult.recordset[0].EndDate,
-        utilization: allocationResult.recordset[0].Utilization
-      } : null
+      // Include ALL allocations as an array
+      allocations: allocationsResult.recordset.map(alloc => ({
+        id: alloc.AllocationID,
+        projectId: alloc.ProjectID,
+        project: {
+          id: alloc.ProjectID,
+          name: alloc.ProjectName
+        },
+        startDate: alloc.StartDate,
+        endDate: alloc.EndDate,
+        utilization: alloc.Utilization
+      }))
     };
+    
+    // For backwards compatibility - include the first allocation as 'allocation'
+    if (allocationsResult.recordset.length > 0) {
+      const primaryAlloc = allocationsResult.recordset[0];
+      formattedResource.allocation = {
+        projectId: primaryAlloc.ProjectID,
+        project: {
+          id: primaryAlloc.ProjectID,
+          name: primaryAlloc.ProjectName
+        },
+        startDate: primaryAlloc.StartDate,
+        endDate: primaryAlloc.EndDate,
+        utilization: primaryAlloc.Utilization
+      };
+    } else {
+      formattedResource.allocation = null;
+    }
     
     res.json(formattedResource);
   } catch (err) {
@@ -156,6 +202,7 @@ exports.getResourceById = async (req, res) => {
     });
   }
 };
+
 
 // Create a new resource
 exports.createResource = async (req, res) => {
