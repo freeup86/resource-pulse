@@ -1,0 +1,90 @@
+import React, { useState, useMemo } from 'react';
+import TabNav from '../layout/TabNav';
+import ResourcesList from './ResourcesList';
+import ResourceForm from './ResourceForm';
+import SearchFilter from '../common/SearchFilter';
+import { useResources } from '../../contexts/ResourceContext';
+
+const ResourcesPage = () => {
+  const { resources } = useResources();
+  const [showForm, setShowForm] = useState(false);
+  const [selectedResource, setSelectedResource] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  
+  const handleAddNew = () => {
+    setSelectedResource(null);
+    setShowForm(true);
+  };
+  
+  const handleEdit = (resource) => {
+    setSelectedResource(resource);
+    setShowForm(true);
+  };
+  
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setSelectedResource(null);
+  };
+  
+  const filterOptions = [
+    { label: 'All', value: 'all', active: statusFilter === 'all' },
+    { label: 'Available', value: 'available', active: statusFilter === 'available' },
+    { label: 'Allocated', value: 'allocated', active: statusFilter === 'allocated' }
+  ];
+  
+  // Filter and search resources
+  const filteredResources = useMemo(() => {
+    return resources.filter(resource => {
+      // Apply status filter
+      if (statusFilter === 'available' && resource.allocation) return false;
+      if (statusFilter === 'allocated' && !resource.allocation) return false;
+      
+      // Apply search filter
+      if (searchTerm) {
+        const searchTermLower = searchTerm.toLowerCase();
+        return (
+          resource.name.toLowerCase().includes(searchTermLower) ||
+          resource.role.toLowerCase().includes(searchTermLower) ||
+          resource.skills.some(skill => skill.toLowerCase().includes(searchTermLower))
+        );
+      }
+      
+      return true;
+    });
+  }, [resources, statusFilter, searchTerm]);
+  
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">Resources Management</h2>
+        <button 
+          onClick={handleAddNew}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          Add New Resource
+        </button>
+      </div>
+      
+      <TabNav />
+      
+      <SearchFilter 
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        filters={filterOptions}
+        onFilterChange={setStatusFilter}
+      />
+      
+      <ResourcesList onEdit={handleEdit} resources={filteredResources} />
+      
+      {showForm && (
+        <ResourceForm 
+          resource={selectedResource} 
+          onClose={handleCloseForm} 
+        />
+      )}
+    </div>
+  );
+};
+
+export default ResourcesPage;
