@@ -70,8 +70,3 @@ CREATE TABLE Allocations (
     FOREIGN KEY (ResourceID) REFERENCES Resources(ResourceID) ON DELETE CASCADE,
     FOREIGN KEY (ProjectID) REFERENCES Projects(ProjectID) ON DELETE CASCADE
 );
-
--- Add unique constraint to prevent duplicate allocations in the same period
-ALTER TABLE Allocations 
-ADD CONSTRAINT UQ_ResourceAllocation 
-UNIQUE (ResourceID, ProjectID, StartDate, EndDate);

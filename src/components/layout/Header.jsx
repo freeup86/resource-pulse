@@ -25,6 +25,7 @@ const Header = () => {
             <li><Link to="/resources" className="hover:underline">Resources</Link></li>
             <li><Link to="/projects" className="hover:underline">Projects</Link></li>
             <li><Link to="/allocations" className="hover:underline">Allocations</Link></li>
+            <li><Link to="/timeline" className="hover:underline">Timeline</Link></li>
           </ul>
         </nav>
         
@@ -69,6 +70,15 @@ const Header = () => {
                     Allocations
                   </Link>
                 </li>
+                <li>
+                <Link 
+                  to="/timeline" 
+                  className="block p-2 hover:bg-blue-700 rounded"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Timeline
+                </Link>
+              </li>
               </ul>
             </nav>
           </div>

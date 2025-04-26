@@ -11,4 +11,7 @@ router.get('/ending-soon', allocationController.getResourcesEndingSoon);
 // GET /api/allocations/matches - Get resource-project matches
 router.get('/matches', allocationController.getResourceMatches);
 
+// GET /api/allocations/resource/:resourceId - Get resource allocations
+router.get('/resource/:resourceId', allocationController.getResourceAllocations);
+
 module.exports = router;

@@ -8,6 +8,7 @@ import ErrorMessage from '../components/common/ErrorMessage';
 import UtilizationChart from './dashboard/UtilizationChart';
 import SkillsAnalysis from './dashboard/SkillsAnalysis';
 import AvailabilityForecast from './dashboard/AvailabilityForecast';
+import MiniTimeline from './dashboard/MiniTimeline';
 
 const Dashboard = () => {
   const { resources, loading: resourcesLoading, error: resourcesError } = useResources();
@@ -92,6 +93,10 @@ const Dashboard = () => {
       
       <div className="mb-6">
         <AvailabilityForecast />
+      </div>
+      {/* Mini Timeline */}
+      <div className="mb-6">
+        <MiniTimeline />
       </div>
       
       {/* Quick Links */}

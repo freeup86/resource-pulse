@@ -48,18 +48,45 @@ exports.updateAllocation = async (req, res) => {
       return res.status(404).json({ message: 'Project not found' });
     }
     
+    // Check if this allocation would exceed 100% utilization for the resource
+    // in the given date range
+    const utilizationCheck = await pool.request()
+      .input('resourceId', sql.Int, resourceId)
+      .input('startDate', sql.Date, new Date(startDate))
+      .input('endDate', sql.Date, new Date(endDate))
+      .input('projectId', sql.Int, projectId)
+      .query(`
+        SELECT SUM(Utilization) AS TotalUtilization
+        FROM Allocations
+        WHERE ResourceID = @resourceId
+        AND ProjectID != @projectId
+        AND (
+          (StartDate <= @endDate AND EndDate >= @startDate)
+        )
+      `);
+    
+    const existingUtilization = utilizationCheck.recordset[0].TotalUtilization || 0;
+    
+    if (existingUtilization + utilization > 100) {
+      return res.status(400).json({ 
+        message: `This allocation would exceed 100% utilization. Current utilization: ${existingUtilization}%` 
+      });
+    }
+    
     // Start a transaction
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     
     try {
-      // Check for existing allocation
+      // Check for existing allocation to this project
       const existingAllocation = await transaction.request()
         .input('resourceId', sql.Int, resourceId)
+        .input('projectId', sql.Int, projectId)
         .query(`
           SELECT AllocationID
           FROM Allocations
           WHERE ResourceID = @resourceId
+          AND ProjectID = @projectId
           AND EndDate >= GETDATE()
         `);
       
@@ -74,12 +101,12 @@ exports.updateAllocation = async (req, res) => {
           .input('updatedAt', sql.DateTime2, new Date())
           .query(`
             UPDATE Allocations
-            SET ProjectID = @projectId,
-                StartDate = @startDate,
+            SET StartDate = @startDate,
                 EndDate = @endDate,
                 Utilization = @utilization,
                 UpdatedAt = @updatedAt
             WHERE ResourceID = @resourceId
+            AND ProjectID = @projectId
             AND EndDate >= GETDATE()
           `);
       } else {
@@ -99,7 +126,7 @@ exports.updateAllocation = async (req, res) => {
       // Commit transaction
       await transaction.commit();
       
-      // Get updated allocation
+      // Get updated allocations for this resource
       const result = await pool.request()
         .input('resourceId', sql.Int, resourceId)
         .query(`
@@ -119,12 +146,7 @@ exports.updateAllocation = async (req, res) => {
           AND a.EndDate >= GETDATE()
         `);
       
-      if (result.recordset.length === 0) {
-        return res.status(404).json({ message: 'Allocation not found after update' });
-      }
-      
-      const allocation = result.recordset[0];
-      const formattedAllocation = {
+      const allocations = result.recordset.map(allocation => ({
         id: allocation.AllocationID,
         resource: {
           id: allocation.ResourceID,
@@ -137,9 +159,9 @@ exports.updateAllocation = async (req, res) => {
         startDate: allocation.StartDate,
         endDate: allocation.EndDate,
         utilization: allocation.Utilization
-      };
+      }));
       
-      res.json(formattedAllocation);
+      res.json(allocations);
     } catch (err) {
       // Rollback transaction on error
       await transaction.rollback();
@@ -149,6 +171,69 @@ exports.updateAllocation = async (req, res) => {
     console.error('Error updating allocation:', err);
     res.status(500).json({
       message: 'Error updating allocation',
+      error: process.env.NODE_ENV === 'production' ? {} : err
+    });
+  }
+};
+
+// Get all allocations for a resource
+exports.getResourceAllocations = async (req, res) => {
+  try {
+    const { resourceId } = req.params;
+    const pool = await poolPromise;
+    
+    // Check if resource exists
+    const resourceCheck = await pool.request()
+      .input('resourceId', sql.Int, resourceId)
+      .query(`
+        SELECT ResourceID FROM Resources WHERE ResourceID = @resourceId
+      `);
+    
+    if (resourceCheck.recordset.length === 0) {
+      return res.status(404).json({ message: 'Resource not found' });
+    }
+    
+    // Get all allocations for this resource
+    const result = await pool.request()
+      .input('resourceId', sql.Int, resourceId)
+      .query(`
+        SELECT 
+          a.AllocationID,
+          a.ResourceID,
+          r.Name AS ResourceName,
+          a.ProjectID,
+          p.Name AS ProjectName,
+          a.StartDate,
+          a.EndDate,
+          a.Utilization
+        FROM Allocations a
+        INNER JOIN Resources r ON a.ResourceID = r.ResourceID
+        INNER JOIN Projects p ON a.ProjectID = p.ProjectID
+        WHERE a.ResourceID = @resourceId
+        AND a.EndDate >= GETDATE()
+        ORDER BY a.StartDate
+      `);
+    
+    const allocations = result.recordset.map(allocation => ({
+      id: allocation.AllocationID,
+      resource: {
+        id: allocation.ResourceID,
+        name: allocation.ResourceName
+      },
+      project: {
+        id: allocation.ProjectID,
+        name: allocation.ProjectName
+      },
+      startDate: allocation.StartDate,
+      endDate: allocation.EndDate,
+      utilization: allocation.Utilization
+    }));
+    
+    res.json(allocations);
+  } catch (err) {
+    console.error('Error getting resource allocations:', err);
+    res.status(500).json({
+      message: 'Error retrieving resource allocations',
       error: process.env.NODE_ENV === 'production' ? {} : err
     });
   }
@@ -277,7 +362,7 @@ exports.getResourceMatches = async (req, res) => {
     // Otherwise, get matches for all projects
     const projectsResult = await pool.request()
       .query(`
-        SELECT ProjectID
+        SELECT ProjectID, Name, Client
         FROM Projects
         WHERE Status = 'Active'
       `);
@@ -285,9 +370,14 @@ exports.getResourceMatches = async (req, res) => {
     const allMatches = [];
     
     for (const project of projectsResult.recordset) {
-      const matches = await getMatchesForProject(pool, project.ProjectID);
-      if (matches.resources.length > 0) {
-        allMatches.push(matches);
+      try {
+        const matches = await getMatchesForProject(pool, project.ProjectID);
+        
+        if (matches.resources.length > 0) {
+          allMatches.push(matches);
+        }
+      } catch (projectMatchError) {
+        console.error(`Error getting matches for project ${project.Name}:`, projectMatchError);
       }
     }
     
@@ -296,7 +386,10 @@ exports.getResourceMatches = async (req, res) => {
     console.error('Error getting resource matches:', err);
     res.status(500).json({
       message: 'Error retrieving resource matches',
-      error: process.env.NODE_ENV === 'production' ? {} : err
+      error: process.env.NODE_ENV === 'production' ? {} : {
+        message: err.message,
+        stack: err.stack
+      }
     });
   }
 };
@@ -334,18 +427,18 @@ const getMatchesForProject = async (pool, projectId) => {
   const requiredSkills = skillsResult.recordset.map(skill => skill.Name);
   const requiredSkillIds = skillsResult.recordset.map(skill => skill.SkillID);
   
-  // Find resources with matching skills
-  // Include resources that are:
-  // 1. Either unallocated OR have allocations ending within 14 days
-  // 2. Have at least one matching skill
+  console.log('Project Required Skills:', requiredSkills);
+
+  // Diagnostic query to check matching logic
   const matchingResourcesResult = await pool.request()
     .input('projectId', sql.Int, projectId)
     .input('thresholdDate', sql.Date, new Date(new Date().setDate(new Date().getDate() + 14)))
     .query(`
-      SELECT DISTINCT
+      SELECT 
         r.ResourceID,
         r.Name,
         r.Role,
+        s.Name AS MatchedSkill,
         CASE 
           WHEN a.ResourceID IS NULL THEN 'available'
           ELSE 'ending-soon'
@@ -355,17 +448,14 @@ const getMatchesForProject = async (pool, projectId) => {
       FROM Resources r
       LEFT JOIN Allocations a ON r.ResourceID = a.ResourceID AND a.EndDate >= GETDATE()
       INNER JOIN ResourceSkills rs ON r.ResourceID = rs.ResourceID
-      INNER JOIN ProjectSkills ps ON rs.SkillID = ps.SkillID
+      INNER JOIN Skills s ON rs.SkillID = s.SkillID
+      INNER JOIN ProjectSkills ps ON s.SkillID = ps.SkillID
       WHERE ps.ProjectID = @projectId
       AND (a.ResourceID IS NULL OR a.EndDate <= @thresholdDate)
-      ORDER BY
-        CASE 
-          WHEN a.ResourceID IS NULL THEN 0
-          ELSE 1
-        END,
-        a.EndDate
     `);
   
+  console.log('Matching Resources Raw Result:', matchingResourcesResult.recordset);
+
   // For each matching resource, calculate match score and get matching skills
   const matchingResources = await Promise.all(
     matchingResourcesResult.recordset.map(async resource => {
@@ -382,8 +472,12 @@ const getMatchesForProject = async (pool, projectId) => {
       const resourceSkills = resourceSkillsResult.recordset.map(skill => skill.Name);
       const resourceSkillIds = resourceSkillsResult.recordset.map(skill => skill.SkillID);
       
+      console.log(`Resource ${resource.Name} Skills:`, resourceSkills);
+      
       // Calculate matching skills
       const matchingSkills = resourceSkills.filter(skill => requiredSkills.includes(skill));
+      
+      console.log(`Matching Skills for ${resource.Name}:`, matchingSkills);
       
       // Calculate match score
       const matchScore = (matchingSkills.length / requiredSkills.length) * 100;
@@ -405,6 +499,8 @@ const getMatchesForProject = async (pool, projectId) => {
   // Sort by match score (descending)
   matchingResources.sort((a, b) => b.matchScore - a.matchScore);
   
+  console.log('Final Matching Resources:', matchingResources);
+
   return {
     project: {
       id: project.ProjectID,

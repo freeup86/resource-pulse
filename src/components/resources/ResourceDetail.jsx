@@ -1,112 +1,190 @@
 import React, { useState } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useResources } from '../../contexts/ResourceContext';
 import { useProjects } from '../../contexts/ProjectContext';
 import { formatDate, calculateDaysUntilEnd } from '../../utils/dateUtils';
 import SkillTag from '../common/SkillTag';
 import StatusBadge from '../common/StatusBadge';
 import UtilizationBar from '../common/UtilizationBar';
 import AllocationForm from '../allocations/AllocationForm';
+import LoadingSpinner from '../common/LoadingSpinner';
+import ErrorMessage from '../common/ErrorMessage';
 
-const ResourceDetail = ({ resource }) => {
-  const { projects } = useProjects();
+const ResourceDetail = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { resources, loading, error, deleteResource } = useResources();
   const [showAllocationForm, setShowAllocationForm] = useState(false);
+  const [selectedAllocation, setSelectedAllocation] = useState(null);
+  
+  const resourceId = parseInt(id);
+  const resource = resources.find(r => r.id === resourceId);
+  
+  const handleAddAllocation = () => {
+    setSelectedAllocation(null);
+    setShowAllocationForm(true);
+  };
+  
+  const handleEditAllocation = (allocation) => {
+    setSelectedAllocation(allocation);
+    setShowAllocationForm(true);
+  };
+  
+  const handleDelete = () => {
+    if (window.confirm('Are you sure you want to delete this resource?')) {
+      deleteResource(resourceId);
+      navigate('/resources');
+    }
+  };
+  
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message={error} />;
   
   if (!resource) {
-    return <div className="text-center p-8">Resource not found</div>;
+    return (
+      <div className="text-center p-8">
+        <h2 className="text-xl font-semibold text-gray-700">Resource not found</h2>
+        <Link to="/resources" className="text-blue-600 hover:underline mt-4 inline-block">
+          Back to Resources
+        </Link>
+      </div>
+    );
   }
   
-  const project = resource.allocation 
-    ? projects.find(p => p.id === resource.allocation.projectId) 
-    : null;
+  // Calculate total utilization
+  const totalUtilization = resource.allocations ? 
+    resource.allocations.reduce((total, allocation) => total + allocation.utilization, 0) : 0;
   
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      <div className="p-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">{resource.name}</h2>
-            <p className="text-gray-600">{resource.role}</p>
+    <div>
+      <div className="mb-4">
+        <Link to="/resources" className="text-blue-600 hover:underline">← Back to Resources</Link>
+      </div>
+      
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="p-6">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">{resource.name}</h2>
+              <p className="text-gray-600">{resource.role}</p>
+            </div>
+            
+            <div className="flex space-x-2">
+              <Link to={`/resources/edit/${resource.id}`} className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
+                Edit
+              </Link>
+              <button 
+                onClick={handleDelete}
+                className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
           </div>
-          <StatusBadge 
-            status={
-              !resource.allocation ? 'available' : 
-              calculateDaysUntilEnd(resource.allocation.endDate) <= 7 ? 'critical' :
-              calculateDaysUntilEnd(resource.allocation.endDate) <= 14 ? 'ending-soon' : 
-              'allocated'
-            } 
-          />
-        </div>
-        
-        <div className="mt-6">
-          <h3 className="text-lg font-medium text-gray-900">Skills</h3>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {resource.skills.map((skill, idx) => (
-              <SkillTag key={idx} skill={skill} />
-            ))}
+          
+          <div className="mt-6">
+            <h3 className="text-lg font-medium text-gray-900">Skills</h3>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {resource.skills.map((skill, idx) => (
+                <SkillTag key={idx} skill={skill} />
+              ))}
+            </div>
           </div>
-        </div>
-        
-        {resource.allocation ? (
+          
           <div className="mt-6">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">Current Allocation</h3>
+              <h3 className="text-lg font-medium text-gray-900">Allocations</h3>
               <button 
-                onClick={() => setShowAllocationForm(true)}
-                className="text-sm text-blue-600 hover:underline"
+                onClick={handleAddAllocation}
+                className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                disabled={totalUtilization >= 100}
               >
-                Edit Allocation
+                Add Allocation
               </button>
             </div>
-            <div className="bg-gray-50 p-4 rounded-lg mt-2">
-              <p className="font-medium">{project?.name}</p>
-              <p className="text-sm text-gray-500">Client: {project?.client}</p>
-              
-              <div className="mt-4">
-                <div className="flex justify-between text-sm mb-1">
-                  <span>Utilization</span>
-                  <span>{resource.allocation.utilization}%</span>
-                </div>
-                <UtilizationBar percentage={resource.allocation.utilization} />
+            
+            <div className="mt-2">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm font-medium">Total Utilization</span>
+                <span className="text-sm font-medium">{totalUtilization}%</span>
               </div>
-              
-              <div className="mt-4 flex justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">End Date</p>
-                  <p className="font-medium">{formatDate(resource.allocation.endDate)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Days Remaining</p>
-                  <p className={`font-medium ${
-                    calculateDaysUntilEnd(resource.allocation.endDate) <= 7 ? 'text-red-600' :
-                    calculateDaysUntilEnd(resource.allocation.endDate) <= 14 ? 'text-yellow-600' :
-                    'text-gray-900'
-                  }`}>
-                    {calculateDaysUntilEnd(resource.allocation.endDate)} days
-                  </p>
-                </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className="bg-blue-600 h-2.5 rounded-full" 
+                  style={{width: `${totalUtilization}%`}}
+                ></div>
               </div>
             </div>
+            
+            {resource.allocations && resource.allocations.length > 0 ? (
+              <div className="mt-4 space-y-4">
+                {resource.allocations.map(allocation => {
+                  const project = allocation.project;
+                  return (
+                    <div key={allocation.id} className="bg-gray-50 p-4 rounded-lg">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium">
+                            <Link to={`/projects/${project.id}`} className="text-blue-600 hover:underline">
+                              {project.name}
+                            </Link>
+                          </h4>
+                          <p className="text-sm text-gray-500">
+                            {formatDate(allocation.startDate)} - {formatDate(allocation.endDate)}
+                          </p>
+                        </div>
+                        <button 
+                          onClick={() => handleEditAllocation(allocation)}
+                          className="text-blue-600 hover:underline text-sm"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      
+                      <div className="mt-2">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Utilization</span>
+                          <span>{allocation.utilization}%</span>
+                        </div>
+                        <UtilizationBar percentage={allocation.utilization} />
+                      </div>
+                      
+                      <div className="mt-2 text-sm">
+                        <span className={`${
+                          calculateDaysUntilEnd(allocation.endDate) <= 7 ? 'text-red-600' :
+                          calculateDaysUntilEnd(allocation.endDate) <= 14 ? 'text-yellow-600' :
+                          'text-gray-500'
+                        }`}>
+                          {calculateDaysUntilEnd(allocation.endDate)} days remaining
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-gray-50 p-4 rounded-lg mt-2 text-center">
+                <p className="text-gray-500">This resource is currently unallocated</p>
+                <button 
+                  onClick={handleAddAllocation}
+                  className="mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                >
+                  Assign to Project
+                </button>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="mt-6">
-            <h3 className="text-lg font-medium text-gray-900">Current Allocation</h3>
-            <div className="bg-gray-50 p-4 rounded-lg mt-2 text-center">
-              <p className="text-gray-500">This resource is currently unallocated</p>
-              <button 
-                onClick={() => setShowAllocationForm(true)}
-                className="mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-              >
-                Assign to Project
-              </button>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
       
       {showAllocationForm && (
         <AllocationForm 
-          resourceId={resource.id}
-          allocation={resource.allocation}
-          onClose={() => setShowAllocationForm(false)}
+          resourceId={resourceId}
+          allocation={selectedAllocation}
+          onClose={() => {
+            setShowAllocationForm(false);
+            setSelectedAllocation(null);
+          }}
         />
       )}
     </div>

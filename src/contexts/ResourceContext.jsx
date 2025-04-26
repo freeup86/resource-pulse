@@ -8,28 +8,82 @@ const ResourceContext = createContext();
 // Resource reducer
 const resourceReducer = (state, action) => {
   switch (action.type) {
+    // ... other cases
     case 'SET_RESOURCES':
-      return action.payload;
+      // Make sure each resource has an allocations array
+      return action.payload.map(resource => ({
+        ...resource,
+        allocations: resource.allocations || (resource.allocation ? [resource.allocation] : [])
+      }));
     case 'ADD_RESOURCE':
-      return [...state, action.payload];
+      return [...state, {
+        ...action.payload,
+        allocations: action.payload.allocations || []
+      }];
     case 'UPDATE_RESOURCE':
       return state.map(resource => 
-        resource.id === action.payload.id ? action.payload : resource
+        resource.id === action.payload.id ? {
+          ...action.payload,
+          allocations: action.payload.allocations || (action.payload.allocation ? [action.payload.allocation] : [])
+        } : resource
       );
-    case 'DELETE_RESOURCE':
-      return state.filter(resource => resource.id !== action.payload);
+    case 'ADD_ALLOCATION':
+      return state.map(resource => {
+        if (resource.id === action.payload.resourceId) {
+          const allocations = [...(resource.allocations || [])];
+          allocations.push(action.payload.allocation);
+          return { ...resource, allocations };
+        }
+        return resource;
+      });
     case 'UPDATE_ALLOCATION':
       return state.map(resource => {
         if (resource.id === action.payload.resourceId) {
-          return {
-            ...resource,
-            allocation: action.payload.allocation
-          };
+          let allocations = [...(resource.allocations || [])];
+          
+          // Find and update the specific allocation
+          const index = allocations.findIndex(a => a.id === action.payload.allocation.id);
+          if (index !== -1) {
+            allocations[index] = action.payload.allocation;
+          } else {
+            // If not found, it's a new allocation
+            allocations.push(action.payload.allocation);
+          }
+          
+          return { ...resource, allocations };
+        }
+        return resource;
+      });
+    case 'REMOVE_ALLOCATION':
+      return state.map(resource => {
+        if (resource.id === action.payload.resourceId) {
+          const allocations = (resource.allocations || [])
+            .filter(a => a.id !== action.payload.allocationId);
+          return { ...resource, allocations };
         }
         return resource;
       });
     default:
       return state;
+  }
+};
+
+const addAllocation = async (resourceId, allocationData) => {
+  try {
+    const response = await allocationService.updateAllocation(resourceId, allocationData);
+    
+    dispatch({ 
+      type: 'ADD_ALLOCATION', 
+      payload: { 
+        resourceId,
+        allocation: response
+      } 
+    });
+    
+    return response;
+  } catch (err) {
+    setError('Failed to add allocation');
+    throw err;
   }
 };
 
@@ -91,18 +145,30 @@ export const ResourceProvider = ({ children }) => {
     }
   };
 
-  const updateAllocation = async (resourceId, allocation) => {
+  const updateAllocation = async (resourceId, allocationData) => {
     try {
-      if (allocation) {
-        await allocationService.updateAllocation(resourceId, allocation);
+      const response = await allocationService.updateAllocation(resourceId, allocationData);
+      
+      if (allocationData.projectId === null) {
+        // This is a removal
+        dispatch({ 
+          type: 'REMOVE_ALLOCATION', 
+          payload: { 
+            resourceId, 
+            allocationId: allocationData.id 
+          } 
+        });
       } else {
-        await allocationService.updateAllocation(resourceId, { projectId: null });
+        dispatch({ 
+          type: 'UPDATE_ALLOCATION', 
+          payload: { 
+            resourceId, 
+            allocation: response 
+          } 
+        });
       }
       
-      dispatch({ 
-        type: 'UPDATE_ALLOCATION', 
-        payload: { resourceId, allocation } 
-      });
+      return response;
     } catch (err) {
       setError('Failed to update allocation');
       throw err;
@@ -117,6 +183,7 @@ export const ResourceProvider = ({ children }) => {
       addResource, 
       updateResource, 
       deleteResource,
+      addAllocation,
       updateAllocation
     }}>
       {children}
