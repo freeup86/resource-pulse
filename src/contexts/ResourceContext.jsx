@@ -8,18 +8,19 @@ const ResourceContext = createContext();
 // Resource reducer
 const resourceReducer = (state, action) => {
   switch (action.type) {
-    // ... other cases
     case 'SET_RESOURCES':
-      // Make sure each resource has an allocations array
+      // Ensure each resource has an allocations array
       return action.payload.map(resource => ({
         ...resource,
         allocations: resource.allocations || (resource.allocation ? [resource.allocation] : [])
       }));
+    
     case 'ADD_RESOURCE':
       return [...state, {
         ...action.payload,
         allocations: action.payload.allocations || []
       }];
+    
     case 'UPDATE_RESOURCE':
       return state.map(resource => 
         resource.id === action.payload.id ? {
@@ -27,15 +28,35 @@ const resourceReducer = (state, action) => {
           allocations: action.payload.allocations || (action.payload.allocation ? [action.payload.allocation] : [])
         } : resource
       );
+    
+    case 'DELETE_RESOURCE':
+      return state.filter(resource => resource.id !== action.payload);
+    
     case 'ADD_ALLOCATION':
       return state.map(resource => {
         if (resource.id === action.payload.resourceId) {
-          const allocations = [...(resource.allocations || [])];
-          allocations.push(action.payload.allocation);
-          return { ...resource, allocations };
+          // Combine existing allocations with new ones
+          const existingAllocations = resource.allocations || [];
+          const newAllocations = Array.isArray(action.payload.allocation) 
+            ? action.payload.allocation 
+            : [action.payload.allocation];
+          
+          // Remove duplicates by allocation ID
+          const combinedAllocations = [
+            ...existingAllocations.filter(existing => 
+              !newAllocations.some(newAlloc => newAlloc.id === existing.id)
+            ),
+            ...newAllocations
+          ];
+          
+          return { 
+            ...resource, 
+            allocations: combinedAllocations 
+          };
         }
         return resource;
       });
+    
     case 'UPDATE_ALLOCATION':
       return state.map(resource => {
         if (resource.id === action.payload.resourceId) {
@@ -46,7 +67,7 @@ const resourceReducer = (state, action) => {
           if (index !== -1) {
             allocations[index] = action.payload.allocation;
           } else {
-            // If not found, it's a new allocation
+            // If not found, add as new allocation
             allocations.push(action.payload.allocation);
           }
           
@@ -54,6 +75,7 @@ const resourceReducer = (state, action) => {
         }
         return resource;
       });
+    
     case 'REMOVE_ALLOCATION':
       return state.map(resource => {
         if (resource.id === action.payload.resourceId) {
@@ -63,27 +85,9 @@ const resourceReducer = (state, action) => {
         }
         return resource;
       });
+    
     default:
       return state;
-  }
-};
-
-const addAllocation = async (resourceId, allocationData) => {
-  try {
-    const response = await allocationService.updateAllocation(resourceId, allocationData);
-    
-    dispatch({ 
-      type: 'ADD_ALLOCATION', 
-      payload: { 
-        resourceId,
-        allocation: response
-      } 
-    });
-    
-    return response;
-  } catch (err) {
-    setError('Failed to add allocation');
-    throw err;
   }
 };
 
@@ -112,7 +116,7 @@ export const ResourceProvider = ({ children }) => {
     fetchResources();
   }, []);
 
-  // Actions
+  // Add Resource
   const addResource = async (resource) => {
     try {
       const newResource = await resourceService.createResource(resource);
@@ -124,6 +128,7 @@ export const ResourceProvider = ({ children }) => {
     }
   };
 
+  // Update Resource
   const updateResource = async (updatedResource) => {
     try {
       const resource = await resourceService.updateResource(updatedResource.id, updatedResource);
@@ -135,6 +140,7 @@ export const ResourceProvider = ({ children }) => {
     }
   };
 
+  // Delete Resource
   const deleteResource = async (resourceId) => {
     try {
       await resourceService.deleteResource(resourceId);
@@ -145,6 +151,36 @@ export const ResourceProvider = ({ children }) => {
     }
   };
 
+  // Add Allocation
+  const addAllocation = async (resourceId, allocationData) => {
+    try {
+      console.log('Attempting to add allocation:', {
+        resourceId,
+        allocationData
+      });
+
+      const response = await allocationService.updateAllocation(resourceId, allocationData);
+      
+      console.log('Allocation response:', response);
+      
+      // Dispatch allocation(s)
+      dispatch({ 
+        type: 'ADD_ALLOCATION', 
+        payload: { 
+          resourceId,
+          allocation: response
+        } 
+      });
+      
+      return response;
+    } catch (err) {
+      console.error('Error adding allocation:', err);
+      setError('Failed to add allocation');
+      throw err;
+    }
+  };
+
+  // Update Allocation
   const updateAllocation = async (resourceId, allocationData) => {
     try {
       const response = await allocationService.updateAllocation(resourceId, allocationData);
@@ -163,13 +199,14 @@ export const ResourceProvider = ({ children }) => {
           type: 'UPDATE_ALLOCATION', 
           payload: { 
             resourceId, 
-            allocation: response 
+            allocation: response[0] // Assuming backend returns array
           } 
         });
       }
       
       return response;
     } catch (err) {
+      console.error('Error updating allocation:', err);
       setError('Failed to update allocation');
       throw err;
     }

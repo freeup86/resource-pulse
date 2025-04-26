@@ -17,13 +17,13 @@ const AllocationForm = ({ resourceId, maxUtilization = 100, allocation = null, o
   useEffect(() => {
     if (allocation) {
       setFormData({
-        projectId: allocation.projectId.toString(),
+        projectId: allocation.projectId ? allocation.projectId.toString() : '',
         startDate: allocation.startDate ? new Date(allocation.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         endDate: allocation.endDate ? new Date(allocation.endDate).toISOString().split('T')[0] : '',
-        utilization: allocation.utilization
+        utilization: allocation.utilization || Math.min(maxUtilization, 100)
       });
     }
-  }, [allocation]);
+  }, [allocation, maxUtilization]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -63,7 +63,7 @@ const AllocationForm = ({ resourceId, maxUtilization = 100, allocation = null, o
     }
     
     try {
-      // Create allocation object
+      // Ensure project ID is a number
       const allocationData = {
         projectId: parseInt(formData.projectId, 10),
         startDate: formData.startDate,
@@ -71,8 +71,8 @@ const AllocationForm = ({ resourceId, maxUtilization = 100, allocation = null, o
         utilization: formData.utilization
       };
       
+      // Include ID if updating an existing allocation
       if (allocation) {
-        // Include ID if updating
         allocationData.id = allocation.id;
         await updateAllocation(resourceId, allocationData);
       } else {
@@ -83,7 +83,15 @@ const AllocationForm = ({ resourceId, maxUtilization = 100, allocation = null, o
       onClose();
     } catch (err) {
       console.error('Error handling allocation:', err);
-      setErrors({ submit: 'An error occurred. Please try again.' });
+      
+      // Check if error response exists and has a message
+      const errorMessage = err.response?.data?.message || 
+                           err.message || 
+                           'An error occurred. Please try again.';
+      
+      setErrors({ 
+        submit: errorMessage 
+      });
     }
   };
 
@@ -99,7 +107,9 @@ const AllocationForm = ({ resourceId, maxUtilization = 100, allocation = null, o
         onClose();
       } catch (err) {
         console.error('Error removing allocation:', err);
-        setErrors({ submit: 'Failed to remove allocation' });
+        setErrors({ 
+          submit: err.response?.data?.message || 'Failed to remove allocation' 
+        });
       }
     }
   };

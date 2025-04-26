@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useResources } from '../../contexts/ResourceContext';
 import { useProjects } from '../../contexts/ProjectContext';
@@ -13,12 +13,17 @@ import ErrorMessage from '../common/ErrorMessage';
 const ResourceDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { resources, loading, error, deleteResource } = useResources();
+  const { resources, loading: resourcesLoading, error: resourcesError, deleteResource } = useResources();
+  const { projects } = useProjects();
   const [showAllocationForm, setShowAllocationForm] = useState(false);
   const [selectedAllocation, setSelectedAllocation] = useState(null);
   
   const resourceId = parseInt(id);
-  const resource = resources.find(r => r.id === resourceId);
+  
+  // Use useMemo to memoize the resource finding logic
+  const resource = useMemo(() => {
+    return resources.find(r => r.id === resourceId);
+  }, [resources, resourceId]);
   
   const handleAddAllocation = () => {
     setSelectedAllocation(null);
@@ -37,9 +42,20 @@ const ResourceDetail = () => {
     }
   };
   
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message={error} />;
+  // Compute total utilization
+  const totalUtilization = useMemo(() => {
+    if (!resource || !resource.allocations) return 0;
+    return resource.allocations.reduce((total, allocation) => 
+      total + (allocation.utilization || 0), 0);
+  }, [resource]);
   
+  // If resources are still loading, show loading spinner
+  if (resourcesLoading) return <LoadingSpinner />;
+  
+  // If there's an error fetching resources, show error message
+  if (resourcesError) return <ErrorMessage message={resourcesError} />;
+  
+  // If resource is not found, show not found message
   if (!resource) {
     return (
       <div className="text-center p-8">
@@ -50,10 +66,6 @@ const ResourceDetail = () => {
       </div>
     );
   }
-  
-  // Calculate total utilization
-  const totalUtilization = resource.allocations ? 
-    resource.allocations.reduce((total, allocation) => total + allocation.utilization, 0) : 0;
   
   return (
     <div>
@@ -86,7 +98,7 @@ const ResourceDetail = () => {
             <h3 className="text-lg font-medium text-gray-900">Skills</h3>
             <div className="flex flex-wrap gap-2 mt-2">
               {resource.skills.map((skill, idx) => (
-                <SkillTag key={idx} skill={skill} />
+                <SkillTag key={`skill-${idx}`} skill={skill} />
               ))}
             </div>
           </div>
@@ -118,16 +130,22 @@ const ResourceDetail = () => {
             
             {resource.allocations && resource.allocations.length > 0 ? (
               <div className="mt-4 space-y-4">
-                {resource.allocations.map(allocation => {
-                  const project = allocation.project;
+                {resource.allocations.map((allocation, index) => {
+                  // Find project by ID
+                  const project = projects.find(p => p.id === allocation.projectId);
+                  
                   return (
-                    <div key={allocation.id} className="bg-gray-50 p-4 rounded-lg">
+                    <div key={`${allocation.id || 'allocation'}-${index}`} className="bg-gray-50 p-4 rounded-lg">
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-medium">
-                            <Link to={`/projects/${project.id}`} className="text-blue-600 hover:underline">
-                              {project.name}
-                            </Link>
+                            {project ? (
+                              <Link to={`/projects/${project.id}`} className="text-blue-600 hover:underline">
+                                {project.name}
+                              </Link>
+                            ) : (
+                              allocation.projectName || 'Unknown Project'
+                            )}
                           </h4>
                           <p className="text-sm text-gray-500">
                             {formatDate(allocation.startDate)} - {formatDate(allocation.endDate)}
@@ -144,9 +162,9 @@ const ResourceDetail = () => {
                       <div className="mt-2">
                         <div className="flex justify-between text-sm mb-1">
                           <span>Utilization</span>
-                          <span>{allocation.utilization}%</span>
+                          <span>{allocation.utilization || 0}%</span>
                         </div>
-                        <UtilizationBar percentage={allocation.utilization} />
+                        <UtilizationBar percentage={allocation.utilization || 0} />
                       </div>
                       
                       <div className="mt-2 text-sm">

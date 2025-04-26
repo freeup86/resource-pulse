@@ -5,6 +5,9 @@ const allocationController = require('../controllers/allocationController');
 // PUT /api/allocations/resource/:resourceId - Update resource allocation
 router.put('/resource/:resourceId', allocationController.updateAllocation);
 
+// DELETE /api/allocations/resource/:resourceId - Remove resource allocation
+router.delete('/resource/:resourceId', allocationController.removeAllocation);
+
 // GET /api/allocations/ending-soon - Get resources with assignments ending soon
 router.get('/ending-soon', allocationController.getResourcesEndingSoon);
 
