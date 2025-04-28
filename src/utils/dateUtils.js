@@ -1,16 +1,31 @@
-import { format, differenceInDays, isValid, parseISO } from 'date-fns';
+import { format, differenceInDays, isValid, parseISO, addDays } from 'date-fns';
+
+// Adjust date to local timezone at start of day and add a day
+const adjustToLocalStartOfDay = (dateInput) => {
+  if (!dateInput) return null;
+  
+  const date = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
+  
+  if (!isValid(date)) return null;
+  
+  // Create a new date object at local midnight and add a day
+  const adjustedDate = new Date(
+    date.getFullYear(), 
+    date.getMonth(), 
+    date.getDate()
+  );
+  
+  return addDays(adjustedDate, 1);
+};
 
 // Format a date to display format
 export const formatDate = (dateStr) => {
   if (!dateStr) return 'N/A';
   
   try {
-    const date = typeof dateStr === 'string' ? parseISO(dateStr) : dateStr;
+    const date = adjustToLocalStartOfDay(dateStr);
     
-    // Check if the date is valid
-    if (!isValid(date)) {
-      return 'Invalid Date';
-    }
+    if (!date) return 'Invalid Date';
     
     return format(date, 'MMM dd, yyyy');
   } catch (error) {
@@ -24,13 +39,10 @@ export const calculateDaysUntilEnd = (endDateStr) => {
   if (!endDateStr) return 0;
   
   try {
-    const today = new Date();
-    const endDate = typeof endDateStr === 'string' ? parseISO(endDateStr) : endDateStr;
+    const today = adjustToLocalStartOfDay(new Date());
+    const endDate = adjustToLocalStartOfDay(endDateStr);
     
-    // Check if the date is valid
-    if (!isValid(endDate)) {
-      return 0;
-    }
+    if (!today || !endDate) return 0;
     
     return differenceInDays(endDate, today);
   } catch (error) {

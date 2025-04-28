@@ -80,18 +80,6 @@ const ResourceDetail = () => {
               <h2 className="text-2xl font-bold text-gray-900">{resource.name}</h2>
               <p className="text-gray-600">{resource.role}</p>
             </div>
-            
-            <div className="flex space-x-2">
-              <Link to={`/resources/edit/${resource.id}`} className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
-                Edit
-              </Link>
-              <button 
-                onClick={handleDelete}
-                className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
-              >
-                Delete
-              </button>
-            </div>
           </div>
           
           <div className="mt-6">

@@ -8,16 +8,26 @@ const ProjectsList = ({ onEdit }) => {
   const { resources } = useResources();
   
   const getAssignedResourceCount = (projectId) => {
-    return resources.filter(
-      resource => resource.allocation && resource.allocation.projectId === projectId
-    ).length;
+    return resources.filter(resource => {
+      // Check traditional allocation property
+      if (resource.allocation && resource.allocation.projectId === projectId) {
+        return true;
+      }
+      
+      // Check allocations array if it exists
+      if (resource.allocations && resource.allocations.length > 0) {
+        return resource.allocations.some(allocation => 
+          allocation && allocation.projectId === projectId
+        );
+      }
+      
+      return false;
+    }).length;
   };
   
   const handleDelete = (id) => {
     // Check if there are resources assigned to this project
-    const hasAssignedResources = resources.some(
-      resource => resource.allocation && resource.allocation.projectId === id
-    );
+    const hasAssignedResources = getAssignedResourceCount(id) > 0;
     
     if (hasAssignedResources) {
       alert('Cannot delete project with assigned resources. Please reassign resources first.');

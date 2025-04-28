@@ -91,20 +91,42 @@ const AllocationForm = ({
       updateAllocation(parseInt(formData.resourceId), allocationData);
       onClose();
     } catch (err) {
-      console.error('Error updating allocation:', err);
-      setErrors({ submit: 'Failed to update allocation. Please try again.' });
+      if (err.response && err.response.status === 400) {
+        setErrors({
+          submit: 'Failed to allocate resource. Allocation would exceed 100% utilization.'
+        });
+      } else {
+        setErrors({
+          submit: 'An error occurred. Please try again.'
+        });
+      }
     }
   };
 
   const handleRemoveAllocation = () => {
+    if (!allocation || !allocation.id) {
+      console.error('Cannot remove allocation: No allocation ID found');
+      setErrors({ submit: 'Failed to remove allocation: No allocation ID found' });
+      return;
+    }
+
     if (window.confirm('Are you sure you want to remove this allocation?')) {
       try {
-        // When removing an allocation, we only need the resourceId
-        updateAllocation(parseInt(formData.resourceId), { 
-          id: allocation ? allocation.id : null,
-          projectId: null 
-        });
-        onClose();
+        // The server expects a different format for removal
+        // Send just the ID for removal
+        const removalData = {
+          id: allocation.id,
+          projectId: null
+        };
+
+        updateAllocation(parseInt(formData.resourceId), removalData)
+          .then(() => {
+            onClose();
+          })
+          .catch(err => {
+            console.error('Error in removal callback:', err);
+            setErrors({ submit: 'Failed to remove allocation. Please try again.' });
+          });
       } catch (err) {
         console.error('Error removing allocation:', err);
         setErrors({ submit: 'Failed to remove allocation. Please try again.' });
@@ -112,17 +134,22 @@ const AllocationForm = ({
     }
   };
 
-  // Filter resources based on context
+  // Format allocation status for display
+  const formatAllocationStatus = (resource) => {
+    if (!resource.allocation && (!resource.allocations || resource.allocations.length === 0)) {
+      return 'Unallocated';
+    }
+    
+    const allocCount = resource.allocations ? resource.allocations.length : 
+                      (resource.allocation ? 1 : 0);
+    
+    return `${allocCount} allocation${allocCount !== 1 ? 's' : ''}`;
+  };
+
+  // Get available resources
   const availableResources = resourceId 
-    ? [resources.find(r => r.id === parseInt(resourceId))] // If resourceId is provided, only show that resource
-    : resources.filter(r => {
-        // If no resourceId, show resources that aren't fully allocated
-        const totalUtilization = r.allocations 
-          ? r.allocations.reduce((total, alloc) => total + alloc.utilization, 0)
-          : (r.allocation ? r.allocation.utilization : 0);
-        
-        return totalUtilization < 100;
-      });
+    ? [resources.find(r => r.id === parseInt(resourceId))]
+    : resources;
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -144,9 +171,9 @@ const AllocationForm = ({
               disabled={!!resourceId}
             >
               <option value="">Select a resource</option>
-              {availableResources.map(resource => (
+              {availableResources.filter(r => r).map(resource => (
                 <option key={resource.id} value={resource.id}>
-                  {resource.name} - {resource.role}
+                  {resource.name} - {resource.role} ({formatAllocationStatus(resource)})
                 </option>
               ))}
             </select>
@@ -242,6 +269,11 @@ const AllocationForm = ({
               {allocation ? 'Update' : 'Create'} Allocation
             </button>
           </div>
+          {errors.submit && (
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+            {errors.submit}
+          </div>
+        )}
         </form>
       </div>
     </div>

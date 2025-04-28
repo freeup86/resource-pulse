@@ -7,6 +7,17 @@ export const updateAllocation = async (resourceId, allocationData) => {
       allocationData
     });
 
+    // If projectId is null, use a special remove method
+    if (allocationData.projectId === null) {
+      const response = await api.post('/allocations/remove', { 
+        resourceId, 
+        allocationId: allocationData.id 
+      });
+      
+      console.log('Allocation removal response:', response.data);
+      return response.data;
+    }
+
     const response = await api.put(`/allocations/resource/${resourceId}`, allocationData);
     
     console.log('Allocation update response:', response.data);

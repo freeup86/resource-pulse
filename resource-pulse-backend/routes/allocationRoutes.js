@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const allocationController = require('../controllers/allocationController');
 
+// POST /api/allocations/remove - Remove resource allocation
+router.post('/remove', allocationController.removeAllocation);
+
 // PUT /api/allocations/resource/:resourceId - Update resource allocation
 router.put('/resource/:resourceId', allocationController.updateAllocation);
-
-// DELETE /api/allocations/resource/:resourceId - Remove resource allocation
-router.delete('/resource/:resourceId', allocationController.removeAllocation);
 
 // GET /api/allocations/ending-soon - Get resources with assignments ending soon
 router.get('/ending-soon', allocationController.getResourcesEndingSoon);

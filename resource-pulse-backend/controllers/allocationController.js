@@ -331,112 +331,6 @@ const getResourcesEndingSoon = async (req, res) => {
   }
 };
 
-// Helper function to get matches for a specific project
-const getMatchesForProject = async (pool, projectId) => {
-  // Get project details
-  const projectResult = await pool.request()
-    .input('projectId', sql.Int, projectId)
-    .query(`
-      SELECT 
-        p.ProjectID, 
-        p.Name, 
-        p.Client
-      FROM Projects p
-      WHERE p.ProjectID = @projectId
-    `);
-  
-  if (projectResult.recordset.length === 0) {
-    throw new Error(`Project with ID ${projectId} not found`);
-  }
-  
-  const project = projectResult.recordset[0];
-  
-  // Get project required skills
-  const skillsResult = await pool.request()
-    .input('projectId', sql.Int, projectId)
-    .query(`
-      SELECT s.SkillID, s.Name
-      FROM Skills s
-      INNER JOIN ProjectSkills ps ON s.SkillID = ps.SkillID
-      WHERE ps.ProjectID = @projectId
-    `);
-  
-  const requiredSkills = skillsResult.recordset.map(skill => skill.Name);
-
-  // Diagnostic query to check matching logic
-  const matchingResourcesResult = await pool.request()
-    .input('projectId', sql.Int, projectId)
-    .input('thresholdDate', sql.Date, new Date(new Date().setDate(new Date().getDate() + 14)))
-    .query(`
-      SELECT 
-        r.ResourceID,
-        r.Name,
-        r.Role,
-        s.Name AS MatchedSkill,
-        CASE 
-          WHEN a.ResourceID IS NULL THEN 'available'
-          ELSE 'ending-soon'
-        END AS AvailabilityStatus,
-        a.EndDate,
-        DATEDIFF(day, GETDATE(), a.EndDate) AS DaysLeft
-      FROM Resources r
-      LEFT JOIN Allocations a ON r.ResourceID = a.ResourceID AND a.EndDate >= GETDATE()
-      INNER JOIN ResourceSkills rs ON r.ResourceID = rs.ResourceID
-      INNER JOIN Skills s ON rs.SkillID = s.SkillID
-      INNER JOIN ProjectSkills ps ON s.SkillID = ps.SkillID
-      WHERE ps.ProjectID = @projectId
-      AND (a.ResourceID IS NULL OR a.EndDate <= @thresholdDate)
-    `);
-  
-  // For each matching resource, calculate match score and get matching skills
-  const matchingResources = await Promise.all(
-    matchingResourcesResult.recordset.map(async resource => {
-      // Get resource skills
-      const resourceSkillsResult = await pool.request()
-        .input('resourceId', sql.Int, resource.ResourceID)
-        .query(`
-          SELECT s.SkillID, s.Name
-          FROM Skills s
-          INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
-          WHERE rs.ResourceID = @resourceId
-        `);
-      
-      const resourceSkills = resourceSkillsResult.recordset.map(skill => skill.Name);
-      
-      // Calculate matching skills
-      const matchingSkills = resourceSkills.filter(skill => requiredSkills.includes(skill));
-      
-      // Calculate match score
-      const matchScore = (matchingSkills.length / requiredSkills.length) * 100;
-      
-      return {
-        id: resource.ResourceID,
-        name: resource.Name,
-        role: resource.Role,
-        skills: resourceSkills,
-        matchingSkills: matchingSkills,
-        matchScore: matchScore,
-        availabilityStatus: resource.AvailabilityStatus,
-        endDate: resource.EndDate,
-        daysLeft: resource.DaysLeft
-      };
-    })
-  );
-  
- // Sort by match score (descending)
- matchingResources.sort((a, b) => b.matchScore - a.matchScore);
-
- return {
-   project: {
-     id: project.ProjectID,
-     name: project.Name,
-     client: project.Client,
-     requiredSkills: requiredSkills
-   },
-   resources: matchingResources
- };
-};
-
 // Get resource matches
 const getResourceMatches = async (req, res) => {
  try {
@@ -484,43 +378,115 @@ const getResourceMatches = async (req, res) => {
  }
 };
 
-// Helper function to remove an allocation
-const removeAllocation = async (req, res, allocationId) => {
+// Remove an allocation
+const removeAllocation = async (req, res) => {
   try {
-    const { resourceId } = req.params;
+    const { resourceId, allocationId } = req.body;
+    
+    // Validate required fields
+    if (!resourceId) {
+      return res.status(400).json({ message: 'Resource ID is required' });
+    }
+    
+    if (!allocationId) {
+      return res.status(400).json({ message: 'Allocation ID is required' });
+    }
+    
     const pool = await poolPromise;
     
-    // Check if resource exists
-    const resourceCheck = await pool.request()
-      .input('resourceId', sql.Int, resourceId)
-      .query(`
-        SELECT ResourceID FROM Resources WHERE ResourceID = @resourceId
-      `);
+    // Start a transaction
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
     
-    if (resourceCheck.recordset.length === 0) {
-      return res.status(404).json({ message: 'Resource not found' });
+    try {
+      // Validate resource exists
+      const resourceCheck = await transaction.request()
+        .input('resourceId', sql.Int, resourceId)
+        .query(`
+          SELECT ResourceID FROM Resources WHERE ResourceID = @resourceId
+        `);
+      
+      if (resourceCheck.recordset.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({ message: 'Resource not found' });
+      }
+      
+      // Validate allocation exists
+      const allocationCheck = await transaction.request()
+        .input('allocationId', sql.Int, allocationId)
+        .input('resourceId', sql.Int, resourceId)
+        .query(`
+          SELECT AllocationID, ProjectID 
+          FROM Allocations 
+          WHERE AllocationID = @allocationId
+          AND ResourceID = @resourceId
+        `);
+      
+      if (allocationCheck.recordset.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({ message: 'Allocation not found' });
+      }
+      
+      // Delete allocation
+      const result = await transaction.request()
+        .input('allocationId', sql.Int, allocationId)
+        .query(`
+          DELETE FROM Allocations
+          WHERE AllocationID = @allocationId
+        `);
+      
+      // Commit transaction
+      await transaction.commit();
+      
+      // Fetch remaining allocations for the resource
+      const remainingAllocations = await pool.request()
+        .input('resourceId', sql.Int, resourceId)
+        .query(`
+          SELECT 
+            a.AllocationID,
+            a.ResourceID,
+            r.Name AS ResourceName,
+            a.ProjectID,
+            p.Name AS ProjectName,
+            a.StartDate,
+            a.EndDate,
+            a.Utilization
+          FROM Allocations a
+          INNER JOIN Resources r ON a.ResourceID = r.ResourceID
+          INNER JOIN Projects p ON a.ProjectID = p.ProjectID
+          WHERE a.ResourceID = @resourceId
+          AND a.EndDate >= GETDATE()
+        `);
+      
+      const allocations = remainingAllocations.recordset.map(allocation => ({
+        id: allocation.AllocationID,
+        resourceId: allocation.ResourceID,
+        projectId: allocation.ProjectID,
+        projectName: allocation.ProjectName,
+        startDate: allocation.StartDate,
+        endDate: allocation.EndDate,
+        utilization: allocation.Utilization
+      }));
+      
+      res.json({ 
+        message: 'Allocation removed successfully',
+        deletedCount: result.rowsAffected[0],
+        remainingAllocations: allocations
+      });
+    } catch (err) {
+      // Rollback transaction on error
+      await transaction.rollback();
+      console.error('Transaction error:', err);
+      res.status(500).json({
+        message: 'Error removing allocation',
+        error: process.env.NODE_ENV === 'production' ? {} : err.message
+      });
     }
-    
-    // Delete the allocation
-    const result = await pool.request()
-      .input('allocationId', sql.Int, allocationId)
-      .input('resourceId', sql.Int, resourceId)
-      .query(`
-        DELETE FROM Allocations
-        WHERE AllocationID = @allocationId
-        AND ResourceID = @resourceId
-      `);
-    
-    if (result.rowsAffected[0] === 0) {
-      return res.status(404).json({ message: 'Allocation not found' });
-    }
-    
-    res.json({ message: 'Allocation removed successfully' });
   } catch (err) {
-    console.error('Error removing allocation:', err);
+    console.error('Allocation removal error:', err);
     res.status(500).json({
-      message: 'Error removing allocation',
-      error: process.env.NODE_ENV === 'production' ? {} : err
+      message: 'Unexpected error occurred',
+      error: process.env.NODE_ENV === 'production' ? {} : err.message
     });
   }
 };
@@ -1080,9 +1046,9 @@ const getMatchesForProject = async (pool, projectId) => {
 
 // Export all methods
 module.exports = {
- updateAllocation,
- getResourceAllocations,
- getResourcesEndingSoon,
- getResourceMatches,
- removeAllocation
+  updateAllocation: require('./allocationController').updateAllocation,
+  getResourceAllocations: require('./allocationController').getResourceAllocations,
+  getResourcesEndingSoon: require('./allocationController').getResourcesEndingSoon,
+  getResourceMatches: require('./allocationController').getResourceMatches,
+  removeAllocation
 };

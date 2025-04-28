@@ -13,10 +13,22 @@ const ProjectDetail = ({ project }) => {
     return <div className="text-center p-8">Project not found</div>;
   }
   
-  // Get resources allocated to this project
-  const assignedResources = resources.filter(
-    resource => resource.allocation && resource.allocation.projectId === project.id
-  );
+  // Get resources allocated to this project - check both allocation and allocations array
+  const assignedResources = resources.filter(resource => {
+    // Check traditional allocation property
+    if (resource.allocation && resource.allocation.projectId === project.id) {
+      return true;
+    }
+    
+    // Check allocations array if it exists
+    if (resource.allocations && resource.allocations.length > 0) {
+      return resource.allocations.some(allocation => 
+        allocation && allocation.projectId === project.id
+      );
+    }
+    
+    return false;
+  });
 
   // When the "Allocate Resources" button is clicked
   const handleAddAllocation = () => {
@@ -73,43 +85,54 @@ const ProjectDetail = ({ project }) => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {assignedResources.map((resource) => (
-                    <tr key={resource.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-gray-900">
-                          <Link to={`/resources/${resource.id}`} className="text-blue-600 hover:underline">
-                            {resource.name}
+                  {assignedResources.map((resource) => {
+                    // Find the allocation for this project
+                    const allocationForProject = resource.allocations 
+                      ? resource.allocations.find(a => a && a.projectId === project.id)
+                      : (resource.allocation && resource.allocation.projectId === project.id 
+                          ? resource.allocation 
+                          : null);
+                    
+                    if (!allocationForProject) return null;
+                    
+                    return (
+                      <tr key={resource.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-medium text-gray-900">
+                            <Link to={`/resources/${resource.id}`} className="text-blue-600 hover:underline">
+                              {resource.name}
+                            </Link>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {resource.role}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <UtilizationBar percentage={allocationForProject.utilization} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <div>{formatDate(allocationForProject.endDate)}</div>
+                          <div className={`text-xs ${
+                            calculateDaysUntilEnd(allocationForProject.endDate) <= 7
+                              ? "text-red-600"
+                              : calculateDaysUntilEnd(allocationForProject.endDate) <= 14
+                              ? "text-yellow-600"
+                              : "text-gray-500"
+                          }`}>
+                            {calculateDaysUntilEnd(allocationForProject.endDate)} days left
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <Link 
+                            to={`/resources/${resource.id}`} 
+                            className="text-blue-600 hover:underline"
+                          >
+                            View
                           </Link>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {resource.role}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <UtilizationBar percentage={resource.allocation.utilization} />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <div>{formatDate(resource.allocation.endDate)}</div>
-                        <div className={`text-xs ${
-                          calculateDaysUntilEnd(resource.allocation.endDate) <= 7
-                            ? "text-red-600"
-                            : calculateDaysUntilEnd(resource.allocation.endDate) <= 14
-                            ? "text-yellow-600"
-                            : "text-gray-500"
-                        }`}>
-                          {calculateDaysUntilEnd(resource.allocation.endDate)} days left
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <Link 
-                          to={`/resources/${resource.id}`} 
-                          className="text-blue-600 hover:underline"
-                        >
-                          View
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
