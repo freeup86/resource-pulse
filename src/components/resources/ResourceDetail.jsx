@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useResources } from '../../contexts/ResourceContext';
 import { useProjects } from '../../contexts/ProjectContext';
 import { formatDate, calculateDaysUntilEnd } from '../../utils/dateUtils';
+import { calculateTotalUtilization } from '../../utils/allocationUtils';
 import SkillTag from '../common/SkillTag';
 import StatusBadge from '../common/StatusBadge';
 import UtilizationBar from '../common/UtilizationBar';
@@ -42,11 +43,10 @@ const ResourceDetail = () => {
     }
   };
   
-  // Compute total utilization
+  // Compute total utilization using the utility function
   const totalUtilization = useMemo(() => {
-    if (!resource || !resource.allocations) return 0;
-    return resource.allocations.reduce((total, allocation) => 
-      total + (allocation.utilization || 0), 0);
+    if (!resource) return 0;
+    return calculateTotalUtilization(resource);
   }, [resource]);
   
   // If resources are still loading, show loading spinner
@@ -66,6 +66,9 @@ const ResourceDetail = () => {
       </div>
     );
   }
+  
+  // Get all allocations
+  const allocations = resource.allocations || [];
   
   return (
     <div>
@@ -96,7 +99,9 @@ const ResourceDetail = () => {
               <h3 className="text-lg font-medium text-gray-900">Allocations</h3>
               <button 
                 onClick={handleAddAllocation}
-                className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                className={`bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 ${
+                  totalUtilization >= 100 ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
                 disabled={totalUtilization >= 100}
               >
                 Add Allocation
@@ -110,20 +115,27 @@ const ResourceDetail = () => {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
                 <div 
-                  className="bg-blue-600 h-2.5 rounded-full" 
-                  style={{width: `${totalUtilization}%`}}
+                  className={`h-2.5 rounded-full ${
+                    totalUtilization > 100 ? 'bg-red-600' : 'bg-blue-600'
+                  }`}
+                  style={{width: `${Math.min(totalUtilization, 100)}%`}}
                 ></div>
               </div>
+              {totalUtilization > 100 && (
+                <p className="text-sm text-red-600 mt-1">
+                  Warning: Total utilization exceeds 100%
+                </p>
+              )}
             </div>
             
-            {resource.allocations && resource.allocations.length > 0 ? (
+            {allocations.length > 0 ? (
               <div className="mt-4 space-y-4">
-                {resource.allocations.map((allocation, index) => {
+                {allocations.map((allocation, index) => {
                   // Find project by ID
                   const project = projects.find(p => p.id === allocation.projectId);
                   
                   return (
-                    <div key={`${allocation.id || 'allocation'}-${index}`} className="bg-gray-50 p-4 rounded-lg">
+                    <div key={`allocation-${allocation.id || index}`} className="bg-gray-50 p-4 rounded-lg">
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-medium">
@@ -187,6 +199,9 @@ const ResourceDetail = () => {
         <AllocationForm 
           resourceId={resourceId}
           allocation={selectedAllocation}
+          maxUtilization={selectedAllocation ? 
+            100 - (totalUtilization - selectedAllocation.utilization) :
+            100 - totalUtilization}
           onClose={() => {
             setShowAllocationForm(false);
             setSelectedAllocation(null);

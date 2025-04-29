@@ -884,12 +884,42 @@ const getMatchesForProject = async (pool, projectId) => {
     `);
   
   const requiredSkills = skillsResult.recordset.map(skill => skill.Name);
-  const requiredSkillIds = skillsResult.recordset.map(skill => skill.SkillID);
   
-  // Find resources with matching skills
-  // Include resources that are:
-  // 1. Have at least one matching skill
-  // 2. Either unallocated OR have availability (total utilization < 100% or have allocations ending within 14 days)
+  // Get project required roles
+  const rolesResult = await pool.request()
+    .input('projectId', sql.Int, projectId)
+    .query(`
+      SELECT pr.RoleID, r.Name, pr.Count
+      FROM ProjectRoles pr
+      INNER JOIN Roles r ON pr.RoleID = r.RoleID
+      WHERE pr.ProjectID = @projectId
+    `);
+  
+  const requiredRoles = rolesResult.recordset.map(role => ({
+    id: role.RoleID,
+    name: role.Name,
+    count: role.Count
+  }));
+  
+  // Calculate how many resources per role are already allocated
+  const allocatedRolesResult = await pool.request()
+    .input('projectId', sql.Int, projectId)
+    .query(`
+      SELECT r.RoleID, COUNT(DISTINCT res.ResourceID) AS AllocatedCount
+      FROM Resources res
+      INNER JOIN Allocations a ON res.ResourceID = a.ResourceID
+      INNER JOIN Roles r ON res.RoleID = r.RoleID
+      WHERE a.ProjectID = @projectId
+      GROUP BY r.RoleID
+    `);
+  
+  // Build allocated counts map
+  const allocatedCounts = {};
+  allocatedRolesResult.recordset.forEach(row => {
+    allocatedCounts[row.RoleID] = row.AllocatedCount;
+  });
+  
+  // Find resources with matching skills OR matching roles
   const matchingResourcesResult = await pool.request()
     .input('projectId', sql.Int, projectId)
     .input('thresholdDate', sql.Date, new Date(new Date().setDate(new Date().getDate() + 14)))
@@ -902,18 +932,22 @@ const getMatchesForProject = async (pool, projectId) => {
         LEFT JOIN Allocations a ON r.ResourceID = a.ResourceID AND a.EndDate >= GETDATE()
         GROUP BY r.ResourceID
       ),
-      ResourcesWithMatchingSkills AS (
+      ResourcesWithMatchingSkillsOrRoles AS (
         SELECT DISTINCT
           r.ResourceID
         FROM Resources r
-        INNER JOIN ResourceSkills rs ON r.ResourceID = rs.ResourceID
-        INNER JOIN ProjectSkills ps ON rs.SkillID = ps.SkillID
-        WHERE ps.ProjectID = @projectId
+        LEFT JOIN ResourceSkills rs ON r.ResourceID = rs.ResourceID
+        LEFT JOIN ProjectSkills ps ON rs.SkillID = ps.SkillID AND ps.ProjectID = @projectId
+        LEFT JOIN ProjectRoles pr ON pr.ProjectID = @projectId AND pr.RoleID = r.RoleID
+        WHERE 
+          ps.ProjectID IS NOT NULL  -- Has at least one matching skill
+          OR pr.ProjectID IS NOT NULL  -- Has a matching role
       )
       SELECT 
         r.ResourceID,
         r.Name,
         r.Role,
+        r.RoleID,
         ru.TotalUtilization,
         CASE 
           WHEN ru.TotalUtilization IS NULL OR ru.TotalUtilization < 100 THEN 'available'
@@ -938,7 +972,7 @@ const getMatchesForProject = async (pool, projectId) => {
           AND a.EndDate >= GETDATE()
         )) AS DaysLeft
       FROM Resources r
-      INNER JOIN ResourcesWithMatchingSkills rms ON r.ResourceID = rms.ResourceID
+      INNER JOIN ResourcesWithMatchingSkillsOrRoles rms ON r.ResourceID = rms.ResourceID
       LEFT JOIN ResourceUtilization ru ON r.ResourceID = ru.ResourceID
       WHERE 
         ru.TotalUtilization IS NULL OR 
@@ -964,7 +998,7 @@ const getMatchesForProject = async (pool, projectId) => {
         )
     `);
   
-  // For each matching resource, calculate match score and get matching skills
+  // For each matching resource, calculate match score and get matching skills/roles
   const matchingResources = await Promise.all(
     matchingResourcesResult.recordset.map(async resource => {
       // Get resource skills
@@ -978,7 +1012,20 @@ const getMatchesForProject = async (pool, projectId) => {
         `);
       
       const resourceSkills = resourceSkillsResult.recordset.map(skill => skill.Name);
-      const resourceSkillIds = resourceSkillsResult.recordset.map(skill => skill.SkillID);
+      
+      // Get role info
+      const roleResult = await pool.request()
+        .input('roleId', sql.Int, resource.RoleID)
+        .query(`
+          SELECT RoleID, Name
+          FROM Roles
+          WHERE RoleID = @roleId
+        `);
+      
+      const role = roleResult.recordset.length > 0 ? {
+        id: roleResult.recordset[0].RoleID,
+        name: roleResult.recordset[0].Name
+      } : null;
       
       // Get allocations for this resource
       const allocationsResult = await pool.request()
@@ -1001,16 +1048,38 @@ const getMatchesForProject = async (pool, projectId) => {
       // Calculate matching skills
       const matchingSkills = resourceSkills.filter(skill => requiredSkills.includes(skill));
       
-      // Calculate match score
-      const matchScore = (matchingSkills.length / requiredSkills.length) * 100;
+      // Calculate if role matches
+      const roleMatches = requiredRoles.some(reqRole => 
+        resource.RoleID === reqRole.id
+      );
+      
+      // Get the matching role if any
+      const matchingRole = requiredRoles.find(reqRole => resource.RoleID === reqRole.id);
+      
+      // Check if the role is still needed (count not fulfilled)
+      const roleNeeded = matchingRole ? 
+        (allocatedCounts[matchingRole.id] || 0) < matchingRole.count : 
+        false;
+      
+      // Calculate match score - higher weight to role matches (40%) and rest to skill matches (60%)
+      const skillMatchScore = requiredSkills.length > 0 ? 
+        (matchingSkills.length / requiredSkills.length) * 60 : 0;
+      
+      const roleMatchScore = roleMatches ? 40 : 0;
+      
+      const totalMatchScore = skillMatchScore + roleMatchScore;
       
       return {
         id: resource.ResourceID,
         name: resource.Name,
         role: resource.Role,
+        roleId: resource.RoleID,
+        roleName: role ? role.name : null,
+        roleMatch: roleMatches,
+        roleNeeded: roleNeeded,
         skills: resourceSkills,
         matchingSkills: matchingSkills,
-        matchScore: matchScore,
+        matchScore: totalMatchScore,
         availabilityStatus: resource.AvailabilityStatus,
         totalUtilization: resource.TotalUtilization || 0,
         endDate: resource.NextAvailableDate,
@@ -1030,15 +1099,34 @@ const getMatchesForProject = async (pool, projectId) => {
     })
   );
   
-  // Sort by match score (descending)
-  matchingResources.sort((a, b) => b.matchScore - a.matchScore);
+  // Sort by role needed first, then match score (descending)
+  matchingResources.sort((a, b) => {
+    // First sort by whether the role is needed
+    if (a.roleNeeded && !b.roleNeeded) return -1;
+    if (!a.roleNeeded && b.roleNeeded) return 1;
+    
+    // Then by match score
+    return b.matchScore - a.matchScore;
+  });
+  
+  // Calculate roles still needed
+  const rolesNeeded = requiredRoles.map(role => {
+    const allocated = allocatedCounts[role.id] || 0;
+    return {
+      ...role,
+      allocated: allocated,
+      needed: Math.max(0, role.count - allocated)
+    };
+  }).filter(role => role.needed > 0);
   
   return {
     project: {
       id: project.ProjectID,
       name: project.Name,
       client: project.Client,
-      requiredSkills: requiredSkills
+      requiredSkills: requiredSkills,
+      requiredRoles: requiredRoles,
+      rolesNeeded: rolesNeeded
     },
     resources: matchingResources
   };

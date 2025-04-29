@@ -23,7 +23,20 @@ const EndingSoonList = ({ resources }) => {
           <tbody className="bg-white divide-y divide-gray-200">
             {resources.length > 0 ? (
               resources.map((resource) => {
-                const daysLeft = resource.allocation.daysLeft;
+                // Get the primary allocation (the first one, which should be ending soon)
+                const allocation = resource.allocation || (resource.allocations && resource.allocations[0]);
+                
+                // Only proceed if there's an allocation
+                if (!allocation) return null;
+                
+                const daysLeft = allocation.daysLeft;
+                
+                // Get project info from either project object or projectName field
+                const projectName = allocation.project 
+                  ? allocation.project.name 
+                  : allocation.projectName;
+
+                const projectId = allocation.projectId || (allocation.project ? allocation.project.id : null);
                 
                 return (
                   <tr key={resource.id}>
@@ -36,12 +49,16 @@ const EndingSoonList = ({ resources }) => {
                       <div className="text-sm text-gray-500">{resource.role}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <Link to={`/projects/${resource.allocation.projectId}`} className="text-blue-600 hover:underline">
-                        {resource.allocation.projectName}
-                      </Link>
+                      {projectId ? (
+                        <Link to={`/projects/${projectId}`} className="text-blue-600 hover:underline">
+                          {projectName || 'Unknown Project'}
+                        </Link>
+                      ) : (
+                        <span>{projectName || 'Unknown Project'}</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(resource.allocation.endDate)}
+                      {formatDate(allocation.endDate)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${

@@ -1,0 +1,76 @@
+// src/contexts/RoleContext.jsx
+import React, { createContext, useContext, useReducer, useEffect, useState } from 'react';
+import * as roleService from '../services/roleService';
+
+// Create context
+const RoleContext = createContext();
+
+// Role reducer
+const roleReducer = (state, action) => {
+  switch (action.type) {
+    case 'SET_ROLES':
+      return action.payload;
+    case 'ADD_ROLE':
+      return [...state, action.payload];
+    default:
+      return state;
+  }
+};
+
+// Provider component
+export const RoleProvider = ({ children }) => {
+  const [roles, dispatch] = useReducer(roleReducer, []);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch roles on mount
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        setLoading(true);
+        const data = await roleService.getRoles();
+        dispatch({ type: 'SET_ROLES', payload: data });
+        setError(null);
+      } catch (err) {
+        setError('Failed to fetch roles');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRoles();
+  }, []);
+
+  // Create new role
+  const addRole = async (role) => {
+    try {
+      const newRole = await roleService.createRole(role);
+      dispatch({ type: 'ADD_ROLE', payload: newRole });
+      return newRole;
+    } catch (err) {
+      setError('Failed to add role');
+      throw err;
+    }
+  };
+
+  return (
+    <RoleContext.Provider value={{ 
+      roles, 
+      loading,
+      error,
+      addRole
+    }}>
+      {children}
+    </RoleContext.Provider>
+  );
+};
+
+// Custom hook for using the role context
+export const useRoles = () => {
+  const context = useContext(RoleContext);
+  if (!context) {
+    throw new Error('useRoles must be used within a RoleProvider');
+  }
+  return context;
+};

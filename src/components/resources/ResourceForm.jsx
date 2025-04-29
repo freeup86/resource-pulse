@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useResources } from '../../contexts/ResourceContext';
+import { useRoles } from '../../contexts/RoleContext';
 
 const ResourceForm = ({ resource = null, onClose }) => {
   const { addResource, updateResource } = useResources();
+  const { roles, loading: rolesLoading } = useRoles();
+  
   const [formData, setFormData] = useState({
     name: '',
-    role: '',
+    roleId: '',  // Changed from 'role' to 'roleId'
+    email: '',
+    phone: '',
     skills: [],
     skillInput: ''
   });
@@ -16,7 +21,9 @@ const ResourceForm = ({ resource = null, onClose }) => {
     if (resource) {
       setFormData({
         name: resource.name,
-        role: resource.role,
+        roleId: resource.roleId || '',  // Use roleId if available
+        email: resource.email || '',
+        phone: resource.phone || '',
         skills: [...resource.skills],
         skillInput: ''
       });
@@ -69,7 +76,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
     // Validate form
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = 'Name is required';
-    if (!formData.role.trim()) newErrors.role = 'Role is required';
+    if (!formData.roleId) newErrors.roleId = 'Role is required';  // Changed to roleId
     if (formData.skills.length === 0) newErrors.skills = 'At least one skill is required';
     
     if (Object.keys(newErrors).length > 0) {
@@ -80,9 +87,10 @@ const ResourceForm = ({ resource = null, onClose }) => {
     // Create or update resource
     const resourceData = {
       name: formData.name,
-      role: formData.role,
-      skills: formData.skills,
-      allocation: resource?.allocation || null
+      roleId: parseInt(formData.roleId),  // Use roleId instead of role string
+      email: formData.email || null,
+      phone: formData.phone || null,
+      skills: formData.skills
     };
     
     if (resource) {
@@ -117,15 +125,45 @@ const ResourceForm = ({ resource = null, onClose }) => {
           
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+            <select
+              name="roleId"
+              value={formData.roleId}
+              onChange={handleChange}
+              className={`w-full p-2 border rounded ${errors.roleId ? 'border-red-500' : 'border-gray-300'}`}
+            >
+              <option value="">Select a role</option>
+              {roles.map(role => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
+            {errors.roleId && <p className="mt-1 text-sm text-red-600">{errors.roleId}</p>}
+            {rolesLoading && <p className="mt-1 text-sm text-gray-500">Loading roles...</p>}
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              className="w-full p-2 border border-gray-300 rounded"
+              placeholder="Enter email address"
+            />
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
             <input
               type="text"
-              name="role"
-              value={formData.role}
+              name="phone"
+              value={formData.phone}
               onChange={handleChange}
-              className={`w-full p-2 border rounded ${errors.role ? 'border-red-500' : 'border-gray-300'}`}
-              placeholder="Enter resource role"
+              className="w-full p-2 border border-gray-300 rounded"
+              placeholder="Enter phone number"
             />
-            {errors.role && <p className="mt-1 text-sm text-red-600">{errors.role}</p>}
           </div>
           
           <div className="mb-4">

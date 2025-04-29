@@ -88,15 +88,13 @@ const Dashboard = () => {
       {/* Analytics */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <UtilizationChart />
-        <SkillsAnalysis />
+        {/*<SkillsAnalysis />*/}
+        {/* Mini Timeline */}
+        <MiniTimeline />
       </div>
       
       <div className="mb-6">
         <AvailabilityForecast />
-      </div>
-      {/* Mini Timeline */}
-      <div className="mb-6">
-        <MiniTimeline />
       </div>
       
       {/* Quick Links */}

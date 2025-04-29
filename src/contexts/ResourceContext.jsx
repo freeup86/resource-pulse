@@ -7,15 +7,22 @@ const resourceReducer = (state, action) => {
   switch (action.type) {
     case 'SET_RESOURCES':
       // Ensure each resource has an allocations array
-      return action.payload.map(resource => ({
-        ...resource,
-        allocations: resource.allocations || (resource.allocation ? [resource.allocation] : [])
-      }));
+      return action.payload.map(resource => {
+        // Create a consistent allocations array
+        const allocations = resource.allocations || 
+          (resource.allocation ? [resource.allocation] : []);
+          
+        return {
+          ...resource,
+          allocations: allocations.filter(Boolean), // Filter out null/undefined
+          allocation: resource.allocation // Keep for backwards compatibility
+        };
+      });
     
     case 'ADD_RESOURCE':
       return [...state, {
         ...action.payload,
-        allocations: action.payload.allocations || []
+        allocations: action.payload.allocations || (action.payload.allocation ? [action.payload.allocation] : [])
       }];
     
     case 'UPDATE_RESOURCE':
@@ -54,7 +61,8 @@ const resourceReducer = (state, action) => {
           
           return { 
             ...resource, 
-            allocations: combinedAllocations 
+            allocations: combinedAllocations,
+            allocation: combinedAllocations[0] || null // Update primary allocation for backwards compatibility
           };
         }
         return resource;
@@ -63,12 +71,6 @@ const resourceReducer = (state, action) => {
     case 'UPDATE_ALLOCATION':
       return state.map(resource => {
         if (resource.id === action.payload.resourceId) {
-          // Check if payload is correctly structured
-          console.log('Updating allocation for resource', {
-            resourceId: action.payload.resourceId,
-            allocation: action.payload.allocation
-          });
-
           // Ensure we have valid allocations array
           let allocations = [...(resource.allocations || [])];
           
@@ -92,7 +94,11 @@ const resourceReducer = (state, action) => {
             }
           });
           
-          return { ...resource, allocations };
+          return { 
+            ...resource, 
+            allocations,
+            allocation: allocations[0] || null // Update primary allocation for backwards compatibility
+          };
         }
         return resource;
       });
@@ -102,7 +108,12 @@ const resourceReducer = (state, action) => {
         if (resource.id === action.payload.resourceId) {
           const allocations = (resource.allocations || [])
             .filter(a => a && a.id !== action.payload.allocationId);
-          return { ...resource, allocations };
+          
+          return { 
+            ...resource, 
+            allocations,
+            allocation: allocations[0] || null // Update primary allocation for backwards compatibility
+          };
         }
         return resource;
       });
@@ -111,6 +122,9 @@ const resourceReducer = (state, action) => {
       return state;
   }
 };
+
+// Create context
+const ResourceContext = createContext();
 
 // Provider component
 export const ResourceProvider = ({ children }) => {
@@ -205,8 +219,6 @@ export const ResourceProvider = ({ children }) => {
     }
   };
 
-
-
   return (
     <ResourceContext.Provider value={{ 
       resources, 
@@ -248,8 +260,7 @@ export const ResourceProvider = ({ children }) => {
     </ResourceContext.Provider>
   );
 };
-  // Create context
-  const ResourceContext = createContext();
+
 // Custom hook for using the resource context
 export const useResources = () => {
   const context = useContext(ResourceContext);

@@ -23,9 +23,9 @@ export const formatDate = (dateStr) => {
   if (!dateStr) return 'N/A';
   
   try {
-    const date = adjustToLocalStartOfDay(dateStr);
+    const date = new Date(dateStr);
     
-    if (!date) return 'Invalid Date';
+    if (!isValid(date)) return 'Invalid Date';
     
     return format(date, 'MMM dd, yyyy');
   } catch (error) {
@@ -39,12 +39,16 @@ export const calculateDaysUntilEnd = (endDateStr) => {
   if (!endDateStr) return 0;
   
   try {
-    const today = adjustToLocalStartOfDay(new Date());
-    const endDate = adjustToLocalStartOfDay(endDateStr);
+    const today = new Date();
+    // Reset time to start of day to avoid partial day calculations
+    today.setHours(0, 0, 0, 0);
     
-    if (!today || !endDate) return 0;
+    const endDate = new Date(endDateStr);
+    // Reset time to start of day to avoid partial day calculations 
+    endDate.setHours(0, 0, 0, 0);
     
-    return differenceInDays(endDate, today);
+    // Add 1 to include the end date itself in the count
+    return differenceInDays(endDate, today) + 1;
   } catch (error) {
     console.error('Error calculating days until end:', error);
     return 0;

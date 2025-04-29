@@ -61,6 +61,20 @@ exports.getProjectById = async (req, res) => {
     const pool = await poolPromise;
     const { id } = req.params;
     
+    // Get required roles
+    const rolesResult = await pool.request()
+    .input('projectId', sql.Int, id)
+    .query(`
+      SELECT 
+        pr.ProjectRoleID,
+        pr.RoleID,
+        r.Name as RoleName,
+        pr.Count
+      FROM ProjectRoles pr
+      INNER JOIN Roles r ON pr.RoleID = r.RoleID
+      WHERE pr.ProjectID = @projectId
+    `);
+
     // Query project
     const result = await pool.request()
       .input('projectId', sql.Int, id)
@@ -121,6 +135,11 @@ exports.getProjectById = async (req, res) => {
       endDate: project.EndDate,
       status: project.Status,
       requiredSkills: skillsResult.recordset.map(skill => skill.Name),
+      requiredRoles: rolesResult.recordset.map(role => ({
+        id: role.RoleID,
+        name: role.RoleName,
+        count: role.Count
+      })),
       allocatedResources: resourcesResult.recordset.map(resource => ({
         id: resource.ResourceID,
         name: resource.Name,
@@ -152,7 +171,8 @@ exports.createProject = async (req, res) => {
       startDate, 
       endDate, 
       status,
-      requiredSkills 
+      requiredSkills,
+      requiredRoles 
     } = req.body;
     
     // Validate required fields
@@ -181,8 +201,9 @@ exports.createProject = async (req, res) => {
       
       const projectId = projectResult.recordset[0].ProjectID;
       
-      // Process required skills
+      // Process required skills if provided
       if (requiredSkills && requiredSkills.length > 0) {
+        // Your existing skill processing code
         for (const skillName of requiredSkills) {
           // Check if skill exists
           const skillResult = await transaction.request()
@@ -219,10 +240,37 @@ exports.createProject = async (req, res) => {
         }
       }
       
+      // Process required roles if provided
+      if (requiredRoles && requiredRoles.length > 0) {
+        for (const roleReq of requiredRoles) {
+          // Validate role exists
+          const roleResult = await transaction.request()
+            .input('roleId', sql.Int, roleReq.roleId)
+            .query(`
+              SELECT RoleID FROM Roles WHERE RoleID = @roleId
+            `);
+          
+          if (roleResult.recordset.length === 0) {
+            // Role doesn't exist, skip it
+            continue;
+          }
+          
+          // Add role requirement to project
+          await transaction.request()
+            .input('projectId', sql.Int, projectId)
+            .input('roleId', sql.Int, roleReq.roleId)
+            .input('count', sql.Int, roleReq.count || 1)
+            .query(`
+              INSERT INTO ProjectRoles (ProjectID, RoleID, Count)
+              VALUES (@projectId, @roleId, @count)
+            `);
+        }
+      }
+      
       // Commit transaction
       await transaction.commit();
       
-      // Return the created project
+      // Return the created project (include required roles)
       const result = await pool.request()
         .input('projectId', sql.Int, projectId)
         .query(`
@@ -248,37 +296,56 @@ exports.createProject = async (req, res) => {
           WHERE ps.ProjectID = @projectId
         `);
       
+      // Get required roles
+      const rolesResult = await pool.request()
+        .input('projectId', sql.Int, projectId)
+        .query(`
+          SELECT 
+            pr.ProjectRoleID,
+            pr.RoleID,
+            r.Name as RoleName,
+            pr.Count
+          FROM ProjectRoles pr
+          INNER JOIN Roles r ON pr.RoleID = r.RoleID
+          WHERE pr.ProjectID = @projectId
+        `);
+      
       // Format the response
-        const project = result.recordset[0];
-    const formattedProject = {
-    id: project.ProjectID,
-    name: project.Name,
-    client: project.Client,
-    description: project.Description,
-    startDate: project.StartDate,
-    endDate: project.EndDate,
-    status: project.Status,
-    requiredSkills: skillsResult.recordset.map(skill => skill.Name),
-    allocatedResources: []
-    };
-
-    res.status(201).json(formattedProject);
+      const project = result.recordset[0];
+      const formattedProject = {
+        id: project.ProjectID,
+        name: project.Name,
+        client: project.Client,
+        description: project.Description,
+        startDate: project.StartDate,
+        endDate: project.EndDate,
+        status: project.Status,
+        requiredSkills: skillsResult.recordset.map(skill => skill.Name),
+        requiredRoles: rolesResult.recordset.map(role => ({
+          id: role.RoleID,
+          name: role.RoleName,
+          count: role.Count
+        })),
+        allocatedResources: []
+      };
+      
+      res.status(201).json(formattedProject);
     } catch (err) {
-    // Rollback transaction on error
-    await transaction.rollback();
-    throw err;
+      // Rollback transaction on error
+      await transaction.rollback();
+      throw err;
     }
-    } catch (err) {
+  } catch (err) {
     console.error('Error creating project:', err);
     res.status(500).json({
-        message: 'Error creating project',
-        error: process.env.NODE_ENV === 'production' ? {} : err
+      message: 'Error creating project',
+      error: process.env.NODE_ENV === 'production' ? {} : err
     });
-    }
-    };
+  }
+};
 
     // Update a project
-    exports.updateProject = async (req, res) => {
+exports.updateProject = async (req, res) => {
     try {
     const pool = await poolPromise;
     const { id } = req.params;
@@ -466,10 +533,10 @@ exports.createProject = async (req, res) => {
         error: process.env.NODE_ENV === 'production' ? {} : err
     });
     }
-    };
+};
 
     // Delete a project
-    exports.deleteProject = async (req, res) => {
+  exports.deleteProject = async (req, res) => {
     try {
     const pool = await poolPromise;
     const { id } = req.params;

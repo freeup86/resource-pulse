@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useResources } from '../../contexts/ResourceContext';
+import { useProjects } from '../../contexts/ProjectContext';
 import { formatDate, calculateDaysUntilEnd } from '../../utils/dateUtils';
+import { calculateTotalUtilization } from '../../utils/allocationUtils';
 import UtilizationBar from '../common/UtilizationBar';
 import AllocationForm from './AllocationForm';
 
@@ -9,9 +11,11 @@ const AllocationList = ({ resource }) => {
   const [selectedAllocation, setSelectedAllocation] = useState(null);
   const { projects } = useProjects();
   
-  // Calculate total utilization
-  const totalUtilization = resource.allocations ? 
-    resource.allocations.reduce((total, alloc) => total + alloc.utilization, 0) : 0;
+  // Calculate total utilization using the utility function
+  const totalUtilization = calculateTotalUtilization(resource);
+  
+  // Get all allocations
+  const allocations = resource.allocations || [];
   
   const handleAddAllocation = () => {
     setSelectedAllocation(null);
@@ -63,15 +67,17 @@ const AllocationList = ({ resource }) => {
         )}
       </div>
       
-      {resource.allocations && resource.allocations.length > 0 ? (
+      {allocations.length > 0 ? (
         <div className="mt-4 space-y-4">
-          {resource.allocations.map(allocation => {
+          {allocations.map((allocation, index) => {
             const project = projects.find(p => p.id === allocation.projectId) || { name: 'Unknown Project' };
+            const projectName = allocation.projectName || project.name;
+            
             return (
-              <div key={allocation.id} className="bg-gray-50 p-4 rounded-lg">
+              <div key={`${allocation.id || index}`} className="bg-gray-50 p-4 rounded-lg">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h4 className="font-medium">{project.name}</h4>
+                    <h4 className="font-medium">{projectName}</h4>
                     <p className="text-sm text-gray-500">
                       {formatDate(allocation.startDate)} - {formatDate(allocation.endDate)}
                     </p>

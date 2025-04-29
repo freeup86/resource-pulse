@@ -8,6 +8,7 @@ const dotenv = require('dotenv');
 const resourceRoutes = require('./routes/resourceRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const allocationRoutes = require('./routes/allocationRoutes');
+const roleRoutes = require('./routes/roleRoutes');
 
 // Load environment variables
 dotenv.config();
@@ -48,6 +49,7 @@ app.get('/', (req, res) => {
 app.use('/api/resources', resourceRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/allocations', allocationRoutes);
+app.use('/api/roles', roleRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {

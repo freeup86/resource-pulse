@@ -208,10 +208,10 @@ exports.getResourceById = async (req, res) => {
 exports.createResource = async (req, res) => {
   try {
     const pool = await poolPromise;
-    const { name, role, email, phone, skills } = req.body;
+    const { name, roleId, email, phone, skills } = req.body;
     
     // Validate required fields
-    if (!name || !role) {
+    if (!name || !roleId) {
       return res.status(400).json({ message: 'Name and role are required' });
     }
     
@@ -223,19 +223,41 @@ exports.createResource = async (req, res) => {
       // Insert resource
       const resourceResult = await transaction.request()
         .input('name', sql.NVarChar, name)
-        .input('role', sql.NVarChar, role)
+        .input('roleId', sql.Int, roleId)
         .input('email', sql.NVarChar, email || null)
         .input('phone', sql.NVarChar, phone || null)
         .query(`
-          INSERT INTO Resources (Name, Role, Email, Phone)
+          INSERT INTO Resources (Name, RoleID, Email, Phone)
           OUTPUT INSERTED.ResourceID
-          VALUES (@name, @role, @email, @phone)
+          VALUES (@name, @roleId, @email, @phone)
         `);
       
       const resourceId = resourceResult.recordset[0].ResourceID;
       
-      // Process skills
+      // Get the role name for the Role column (for backward compatibility)
+      const roleResult = await transaction.request()
+        .input('roleId', sql.Int, roleId)
+        .query(`
+          SELECT Name
+          FROM Roles
+          WHERE RoleID = @roleId
+        `);
+      
+      const roleName = roleResult.recordset[0]?.Name || '';
+      
+      // Update the Role text column to maintain compatibility
+      await transaction.request()
+        .input('resourceId', sql.Int, resourceId)
+        .input('roleName', sql.NVarChar, roleName)
+        .query(`
+          UPDATE Resources
+          SET Role = @roleName
+          WHERE ResourceID = @resourceId
+        `);
+      
+      // Process skills as before
       if (skills && skills.length > 0) {
+        // Your existing skill processing code
         for (const skillName of skills) {
           // Check if skill exists
           const skillResult = await transaction.request()
@@ -275,7 +297,7 @@ exports.createResource = async (req, res) => {
       // Commit transaction
       await transaction.commit();
       
-      // Return the created resource
+      // Return the created resource with the role info
       const result = await pool.request()
         .input('resourceId', sql.Int, resourceId)
         .query(`
@@ -283,9 +305,12 @@ exports.createResource = async (req, res) => {
             r.ResourceID, 
             r.Name, 
             r.Role, 
+            r.RoleID,
+            ro.Name as RoleName,
             r.Email, 
             r.Phone
           FROM Resources r
+          LEFT JOIN Roles ro ON r.RoleID = ro.RoleID
           WHERE r.ResourceID = @resourceId
         `);
       
@@ -305,6 +330,8 @@ exports.createResource = async (req, res) => {
         id: resource.ResourceID,
         name: resource.Name,
         role: resource.Role,
+        roleId: resource.RoleID,
+        roleName: resource.RoleName,
         email: resource.Email,
         phone: resource.Phone,
         skills: skillsResult.recordset.map(skill => skill.Name),
@@ -331,10 +358,10 @@ exports.updateResource = async (req, res) => {
   try {
     const pool = await poolPromise;
     const { id } = req.params;
-    const { name, role, email, phone, skills } = req.body;
+    const { name, roleId, email, phone, skills } = req.body;
     
     // Validate required fields
-    if (!name || !role) {
+    if (!name || !roleId) {
       return res.status(400).json({ message: 'Name and role are required' });
     }
     
@@ -355,18 +382,31 @@ exports.updateResource = async (req, res) => {
         return res.status(404).json({ message: 'Resource not found' });
       }
       
-      // Update resource
+      // Get the role name for the Role column (for backward compatibility)
+      const roleResult = await transaction.request()
+        .input('roleId', sql.Int, roleId)
+        .query(`
+          SELECT Name
+          FROM Roles
+          WHERE RoleID = @roleId
+        `);
+      
+      const roleName = roleResult.recordset[0]?.Name || '';
+      
+      // Update resource with roleId and role text for compatibility
       await transaction.request()
         .input('resourceId', sql.Int, id)
         .input('name', sql.NVarChar, name)
-        .input('role', sql.NVarChar, role)
+        .input('roleId', sql.Int, roleId)
+        .input('roleName', sql.NVarChar, roleName)
         .input('email', sql.NVarChar, email || null)
         .input('phone', sql.NVarChar, phone || null)
         .input('updatedAt', sql.DateTime2, new Date())
         .query(`
           UPDATE Resources
           SET Name = @name,
-              Role = @role,
+              RoleID = @roleId,
+              Role = @roleName,
               Email = @email,
               Phone = @phone,
               UpdatedAt = @updatedAt
@@ -433,9 +473,12 @@ exports.updateResource = async (req, res) => {
             r.ResourceID, 
             r.Name, 
             r.Role, 
+            r.RoleID,
+            ro.Name as RoleName,
             r.Email, 
             r.Phone
           FROM Resources r
+          LEFT JOIN Roles ro ON r.RoleID = ro.RoleID
           WHERE r.ResourceID = @resourceId
         `);
       
@@ -473,6 +516,8 @@ exports.updateResource = async (req, res) => {
         id: resource.ResourceID,
         name: resource.Name,
         role: resource.Role,
+        roleId: resource.RoleID,
+        roleName: resource.RoleName,
         email: resource.Email,
         phone: resource.Phone,
         skills: skillsResult.recordset.map(skill => skill.Name),
@@ -482,7 +527,15 @@ exports.updateResource = async (req, res) => {
           startDate: allocationResult.recordset[0].StartDate,
           endDate: allocationResult.recordset[0].EndDate,
           utilization: allocationResult.recordset[0].Utilization
-        } : null
+        } : null,
+        allocations: allocationResult.recordset.map(alloc => ({
+          id: alloc.AllocationID,
+          projectId: alloc.ProjectID,
+          projectName: alloc.ProjectName,
+          startDate: alloc.StartDate,
+          endDate: alloc.EndDate,
+          utilization: alloc.Utilization
+        }))
       };
       
       res.json(formattedResource);

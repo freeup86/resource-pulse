@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useResources } from '../../contexts/ResourceContext';
 import { useProjects } from '../../contexts/ProjectContext';
+import { calculateTotalUtilization } from '../../utils/allocationUtils';
 
 const AllocationForm = ({ 
   resourceId = null, 
   projectId = null, 
   allocation = null, 
-  maxUtilization = 100, 
+  maxUtilization = null, 
   onClose 
 }) => {
   const { resources, updateAllocation } = useResources();
@@ -14,28 +15,87 @@ const AllocationForm = ({
   const [formData, setFormData] = useState({
     resourceId: resourceId || '',
     projectId: projectId || '',
-    startDate: new Date().toISOString().split('T')[0], // Today
+    startDate: new Date().toISOString().split('T')[0],
     endDate: '',
     utilization: 100
   });
   const [errors, setErrors] = useState({});
 
+  // Find the current resource
+  const resource = resourceId ? resources.find(r => r.id === parseInt(resourceId)) : null;
+  
+  // Find the selected project to get its dates
+  const selectedProject = formData.projectId ? 
+    projects.find(p => p.id === parseInt(formData.projectId)) : null;
+  
+  // Calculate total existing utilization excluding current allocation if editing
+  const currentTotalUtilization = resource ? 
+    calculateTotalUtilization(resource) - (allocation ? (allocation.utilization || 0) : 0) : 0;
+  
+  // Set maximum available utilization
+  const availableUtilization = maxUtilization !== null ? 
+    maxUtilization : 
+    Math.max(0, 100 - currentTotalUtilization);
+
+  // Format date for input without adding a day
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    
+    // Create a date object from the string
+    const date = new Date(dateString);
+    
+    // Format the date as YYYY-MM-DD without adjusting the day
+    const year = date.getFullYear();
+    // getMonth() is 0-indexed, so add 1
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  };
+
   // If editing an existing allocation, populate the form
   useEffect(() => {
     if (allocation) {
-      // Handle different possible allocation structures
-      const allocationProjectId = allocation.projectId || 
-                        (allocation.project && allocation.project.id ? allocation.project.id : '');
-      
       setFormData({
         resourceId: resourceId || '',
-        projectId: allocationProjectId || '',
-        startDate: allocation.startDate ? new Date(allocation.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        endDate: allocation.endDate ? new Date(allocation.endDate).toISOString().split('T')[0] : '',
-        utilization: allocation.utilization || 100
+        projectId: allocation.projectId || (allocation.project ? allocation.project.id : ''),
+        startDate: allocation.startDate ? formatDateForInput(allocation.startDate) : new Date().toISOString().split('T')[0],
+        endDate: allocation.endDate ? formatDateForInput(allocation.endDate) : '',
+        utilization: allocation.utilization || 100,
+        id: allocation.id // Save the allocation ID for updates
       });
+    } else if (resourceId || projectId) {
+      // Initialize with provided resourceId or projectId
+      setFormData(prev => ({
+        ...prev,
+        resourceId: resourceId || prev.resourceId,
+        projectId: projectId || prev.projectId,
+        utilization: Math.min(prev.utilization, availableUtilization)
+      }));
     }
-  }, [allocation, resourceId]);
+  }, [allocation, resourceId, projectId, availableUtilization]);
+
+  // Auto-populate start and end dates from project when project is selected
+  useEffect(() => {
+    // Only auto-populate when projectId changes and a valid project is selected
+    if (formData.projectId && selectedProject) {
+      // Don't overwrite dates if we're editing an existing allocation
+      if (!allocation) {
+        setFormData(prev => ({
+          ...prev,
+          // Only update start date if project has one and form is empty or default
+          startDate: selectedProject.startDate && 
+            (!prev.startDate || prev.startDate === new Date().toISOString().split('T')[0]) ? 
+            formatDateForInput(selectedProject.startDate) : 
+            prev.startDate,
+          // Only update end date if project has one and form is empty
+          endDate: selectedProject.endDate ? 
+            formatDateForInput(selectedProject.endDate) : 
+            prev.endDate
+        }));
+      }
+    }
+  }, [formData.projectId, selectedProject, allocation]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -53,7 +113,7 @@ const AllocationForm = ({
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Validate form
@@ -61,8 +121,8 @@ const AllocationForm = ({
     if (!formData.resourceId) newErrors.resourceId = 'Resource is required';
     if (!formData.projectId) newErrors.projectId = 'Project is required';
     if (!formData.endDate) newErrors.endDate = 'End date is required';
-    if (formData.utilization < 1 || formData.utilization > maxUtilization) {
-      newErrors.utilization = `Utilization must be between 1 and ${maxUtilization}`;
+    if (formData.utilization < 1 || formData.utilization > availableUtilization) {
+      newErrors.utilization = `Utilization must be between 1 and ${availableUtilization}`;
     }
     if (formData.startDate && formData.endDate && new Date(formData.startDate) > new Date(formData.endDate)) {
       newErrors.endDate = 'End date must be after start date';
@@ -82,18 +142,19 @@ const AllocationForm = ({
     };
     
     // Include allocation ID if we're editing an existing one
-    if (allocation && allocation.id) {
-      allocationData.id = allocation.id;
+    if (formData.id) {
+      allocationData.id = formData.id;
     }
     
     try {
       // Update resource allocation
-      updateAllocation(parseInt(formData.resourceId), allocationData);
+      await updateAllocation(parseInt(formData.resourceId), allocationData);
       onClose();
     } catch (err) {
+      console.error('Error in allocation form submission:', err);
       if (err.response && err.response.status === 400) {
         setErrors({
-          submit: 'Failed to allocate resource. Allocation would exceed 100% utilization.'
+          submit: err.response.data?.message || 'Failed to allocate resource. Allocation would exceed 100% utilization.'
         });
       } else {
         setErrors({
@@ -103,7 +164,7 @@ const AllocationForm = ({
     }
   };
 
-  const handleRemoveAllocation = () => {
+  const handleRemoveAllocation = async () => {
     if (!allocation || !allocation.id) {
       console.error('Cannot remove allocation: No allocation ID found');
       setErrors({ submit: 'Failed to remove allocation: No allocation ID found' });
@@ -113,43 +174,43 @@ const AllocationForm = ({
     if (window.confirm('Are you sure you want to remove this allocation?')) {
       try {
         // The server expects a different format for removal
-        // Send just the ID for removal
         const removalData = {
           id: allocation.id,
           projectId: null
         };
 
-        updateAllocation(parseInt(formData.resourceId), removalData)
-          .then(() => {
-            onClose();
-          })
-          .catch(err => {
-            console.error('Error in removal callback:', err);
-            setErrors({ submit: 'Failed to remove allocation. Please try again.' });
-          });
+        await updateAllocation(parseInt(formData.resourceId), removalData);
+        onClose();
       } catch (err) {
-        console.error('Error removing allocation:', err);
-        setErrors({ submit: 'Failed to remove allocation. Please try again.' });
+        console.error('Error in removal callback:', err);
+        setErrors({ 
+          submit: err.response?.data?.message || 'Failed to remove allocation. Please try again.' 
+        });
       }
     }
   };
 
   // Format allocation status for display
   const formatAllocationStatus = (resource) => {
-    if (!resource.allocation && (!resource.allocations || resource.allocations.length === 0)) {
+    if (!resource) return 'Unknown';
+    
+    const totalUtilization = calculateTotalUtilization(resource);
+    const allocations = resource.allocations || [];
+    
+    if (allocations.length === 0) {
       return 'Unallocated';
+    } else {
+      return `${allocations.length} allocation${allocations.length !== 1 ? 's' : ''} (${totalUtilization}% total)`;
     }
-    
-    const allocCount = resource.allocations ? resource.allocations.length : 
-                      (resource.allocation ? 1 : 0);
-    
-    return `${allocCount} allocation${allocCount !== 1 ? 's' : ''}`;
   };
 
-  // Get available resources
-  const availableResources = resourceId 
-    ? [resources.find(r => r.id === parseInt(resourceId))]
-    : resources;
+  // Get available resources (exclude fully allocated if adding a new allocation)
+  const availableResources = resources.filter(r => {
+    if (allocation && r.id === parseInt(resourceId)) return true;
+    
+    const rUtilization = calculateTotalUtilization(r);
+    return rUtilization < 100;
+  });
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -171,7 +232,7 @@ const AllocationForm = ({
               disabled={!!resourceId}
             >
               <option value="">Select a resource</option>
-              {availableResources.filter(r => r).map(resource => (
+              {availableResources.map(resource => (
                 <option key={resource.id} value={resource.id}>
                   {resource.name} - {resource.role} ({formatAllocationStatus(resource)})
                 </option>
@@ -225,13 +286,13 @@ const AllocationForm = ({
           
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Utilization (%) - Maximum: {maxUtilization}%
+              Utilization (%) - Available: {availableUtilization}%
             </label>
             <input
               type="number"
               name="utilization"
               min="1"
-              max={maxUtilization}
+              max={availableUtilization}
               value={formData.utilization}
               onChange={handleChange}
               className={`w-full p-2 border rounded ${errors.utilization ? 'border-red-500' : 'border-gray-300'}`}
@@ -269,11 +330,6 @@ const AllocationForm = ({
               {allocation ? 'Update' : 'Create'} Allocation
             </button>
           </div>
-          {errors.submit && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-            {errors.submit}
-          </div>
-        )}
         </form>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useResources } from '../../contexts/ResourceContext';
+import { isAllocated } from '../../utils/allocationUtils';
 import SkillTag from '../common/SkillTag';
 import AllocationForm from './AllocationForm';
 
@@ -9,7 +10,8 @@ const UnallocatedResources = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedResource, setSelectedResource] = useState(null);
   
-  const unallocatedResources = resources.filter(resource => !resource.allocation);
+  // Correctly identify unallocated resources
+  const unallocatedResources = resources.filter(resource => !isAllocated(resource));
   
   const handleAllocate = (resource) => {
     setSelectedResource(resource);
