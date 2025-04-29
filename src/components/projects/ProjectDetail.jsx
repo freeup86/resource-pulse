@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useResources } from '../../contexts/ResourceContext';
+import { useRoles } from '../../contexts/RoleContext';
 import { formatDate, calculateDaysUntilEnd } from '../../utils/dateUtils';
 import UtilizationBar from '../common/UtilizationBar';
 import AllocationForm from '../allocations/AllocationForm';
 
 const ProjectDetail = ({ project }) => {
   const { resources } = useResources();
+  const { roles } = useRoles();
   const [showAllocationForm, setShowAllocationForm] = useState(false);
+  const [roleAssignments, setRoleAssignments] = useState([]);
   
   if (!project) {
     return <div className="text-center p-8">Project not found</div>;
@@ -30,31 +33,54 @@ const ProjectDetail = ({ project }) => {
     return false;
   });
 
-  // Group assigned resources by role
-  const resourcesByRole = {};
-  assignedResources.forEach(resource => {
-    const roleId = resource.roleId;
-    const roleName = resource.roleName || resource.role || 'Unknown Role';
+  // Create a more accurate role matching function - handles string comparison better
+  const isRoleMatch = (requiredRole, resourceRole) => {
+    if (!requiredRole || !resourceRole) return false;
     
-    if (!resourcesByRole[roleId]) {
-      resourcesByRole[roleId] = {
-        id: roleId,
-        name: roleName,
-        resources: []
-      };
-    }
+    // Clean up and normalize strings for comparison
+    const normalizeString = (str) => {
+      return (str || '').toLowerCase().trim()
+        .replace(/\s+/g, ' ') // normalize whitespace
+        .replace(/[-_]/g, ' '); // treat hyphens and underscores as spaces
+    };
     
-    resourcesByRole[roleId].resources.push(resource);
-  });
-
-  // Calculate role fulfillment
+    const normalizedRequired = normalizeString(requiredRole);
+    const normalizedResource = normalizeString(resourceRole);
+    
+    // Check for exact or close matches
+    return (
+      normalizedRequired === normalizedResource ||
+      // Include partial matching to handle differences in wording
+      normalizedRequired.includes(normalizedResource) ||
+      normalizedResource.includes(normalizedRequired)
+    );
+  };
+  
+  // Calculate role fulfillment with enhanced matching
   const roleFulfillment = (project.requiredRoles || []).map(role => {
-    const assigned = (resourcesByRole[role.id]?.resources || []).length;
+    // Find assigned resources with matching role (either by ID or by name)
+    const matchingResources = assignedResources.filter(resource => {
+      // Get role information from the resource
+      const resourceRoleId = resource.roleId;
+      const resourceRoleName = resource.roleName || resource.role || '';
+      
+      // 1. Check if resource role matches by ID
+      if (resourceRoleId && resourceRoleId === role.id) {
+        return true;
+      }
+      
+      // 2. Check if resource role matches by name with enhanced string matching
+      return isRoleMatch(role.name, resourceRoleName);
+    });
+    
+    const assigned = matchingResources.length;
+    
     return {
       ...role,
       assigned,
       fulfilled: assigned >= role.count,
-      remaining: Math.max(0, role.count - assigned)
+      remaining: Math.max(0, role.count - assigned),
+      matchingResources
     };
   });
 
@@ -120,28 +146,36 @@ const ProjectDetail = ({ project }) => {
         {project.requiredRoles && project.requiredRoles.length > 0 && (
           <div className="mt-6">
             <h3 className="text-lg font-medium text-gray-900">Required Roles</h3>
-            <div className="mt-2 grid gap-2 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-2">
               {roleFulfillment.map((role, idx) => (
                 <div 
                   key={idx} 
-                  className={`p-2 rounded-lg border ${
-                    role.fulfilled ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'
+                  className={`p-3 rounded-lg border ${
+                    role.fulfilled 
+                      ? 'border-green-200 bg-green-50' 
+                      : 'border-yellow-200 bg-yellow-50'
                   }`}
                 >
-                  <div className="font-medium">{role.name}</div>
-                  <div className="flex justify-between text-sm mt-1">
-                    <span>Required:</span>
-                    <span>{role.count}</span>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">{role.name}</span>
+                    <span className="text-sm px-2 py-1 rounded-full bg-purple-100 text-purple-800">
+                      Required: {role.count}
+                    </span>
                   </div>
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-sm mt-2">
                     <span>Assigned:</span>
                     <span className={role.fulfilled ? 'text-green-600' : 'text-yellow-600'}>
-                      {role.assigned}
+                      {role.assigned}/{role.count}
                     </span>
                   </div>
                   {!role.fulfilled && (
                     <div className="text-xs text-yellow-600 mt-1 text-right">
                       Need {role.remaining} more
+                    </div>
+                  )}
+                  {role.matchingResources && role.matchingResources.length > 0 && (
+                    <div className="text-xs mt-1 text-gray-500">
+                      {role.matchingResources.map(r => r.name).join(', ')}
                     </div>
                   )}
                 </div>
@@ -227,7 +261,7 @@ const ProjectDetail = ({ project }) => {
                             to={`/resources/${resource.id}`} 
                             className="text-blue-600 hover:underline"
                           >
-                            View
+                            View / Edit
                           </Link>
                         </td>
                       </tr>

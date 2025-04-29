@@ -22,17 +22,20 @@ const ProjectForm = ({ project = null, onClose }) => {
   // If editing an existing project, populate the form
   useEffect(() => {
     if (project) {
+      // Important: Transform role data from {id, name, count} to {roleId, name, count}
+      const formattedRoles = project.requiredRoles ? project.requiredRoles.map(role => ({
+        roleId: parseInt(role.id), // Map from id to roleId and ensure it's an integer
+        count: parseInt(role.count) || 1, // Ensure count is an integer
+        name: role.name
+      })) : [];
+      
       setFormData({
         name: project.name,
         client: project.client,
         description: project.description || '',
         requiredSkills: [...project.requiredSkills],
         skillInput: '',
-        requiredRoles: project.requiredRoles ? project.requiredRoles.map(role => ({
-          roleId: role.id,
-          count: role.count,
-          name: role.name
-        })) : [],
+        requiredRoles: formattedRoles,
         roleInput: { roleId: '', count: 1 },
         startDate: project.startDate || '',
         endDate: project.endDate || ''
@@ -83,16 +86,19 @@ const ProjectForm = ({ project = null, onClose }) => {
   // Handle adding roles
   const handleAddRole = () => {
     if (formData.roleInput.roleId) {
+      const roleIdInt = parseInt(formData.roleInput.roleId);
+      const countInt = parseInt(formData.roleInput.count) || 1;
+      
       // Check if role already exists in the list
-      if (!formData.requiredRoles.some(r => r.roleId === parseInt(formData.roleInput.roleId))) {
-        const selectedRole = roles.find(r => r.id === parseInt(formData.roleInput.roleId));
+      if (!formData.requiredRoles.some(r => parseInt(r.roleId) === roleIdInt)) {
+        const selectedRole = roles.find(r => r.id === roleIdInt);
         setFormData(prev => ({
           ...prev,
           requiredRoles: [
             ...prev.requiredRoles, 
             { 
-              roleId: parseInt(prev.roleInput.roleId), 
-              count: parseInt(prev.roleInput.count) || 1,
+              roleId: roleIdInt, 
+              count: countInt,
               name: selectedRole ? selectedRole.name : 'Unknown Role'
             }
           ],
@@ -108,14 +114,14 @@ const ProjectForm = ({ project = null, onClose }) => {
   };
   
   // Handle removing roles
-  const handleRemoveRole = (roleId) => {
+  const handleRemoveRole = (roleIdToRemove) => {
     setFormData(prev => ({
       ...prev,
-      requiredRoles: prev.requiredRoles.filter(r => r.roleId !== roleId)
+      requiredRoles: prev.requiredRoles.filter(r => parseInt(r.roleId) !== parseInt(roleIdToRemove))
     }));
   };
   
-  // Handle changes to role input
+  // Handle role input changes
   const handleRoleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -145,24 +151,46 @@ const ProjectForm = ({ project = null, onClose }) => {
       return;
     }
     
+    // Format required roles to ensure they have the proper format for the API
+    const formattedRoles = formData.requiredRoles.map(role => ({
+      roleId: parseInt(role.roleId),
+      count: parseInt(role.count) || 1
+    }));
+    
+    // Log the formatted roles for debugging
+    console.log('Required Roles (formatted):', formattedRoles);
+    
     // Create project object
     const projectData = {
       name: formData.name,
       client: formData.client,
       description: formData.description || null,
       requiredSkills: formData.requiredSkills,
-      requiredRoles: formData.requiredRoles,
+      requiredRoles: formattedRoles,
       startDate: formData.startDate || null,
-      endDate: formData.endDate || null
+      endDate: formData.endDate || null,
+      status: 'Active' // Make sure status is included
     };
     
-    if (project) {
-      updateProject({ ...projectData, id: project.id });
-    } else {
-      addProject(projectData);
-    }
+    // Log the project data for debugging
+    console.log('Project data for submission:', projectData);
     
-    onClose();
+    try {
+      if (project) {
+        console.log('Updating project with ID:', project.id);
+        updateProject({ ...projectData, id: project.id });
+      } else {
+        console.log('Creating new project');
+        addProject(projectData);
+      }
+      
+      onClose();
+    } catch (error) {
+      console.error('Error submitting project:', error);
+      setErrors({
+        form: 'Failed to save project. Please try again.'
+      });
+    }
   };
 
   return (
@@ -323,6 +351,12 @@ const ProjectForm = ({ project = null, onClose }) => {
               ))}
             </div>
           </div>
+          
+          {errors.form && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+              {errors.form}
+            </div>
+          )}
           
           <div className="flex justify-end space-x-3 mt-6">
             <button

@@ -12,4 +12,10 @@ router.post('/', roleController.createRole);
 // GET /api/roles/:id - Get role by ID
 router.get('/:id', roleController.getRoleById);
 
+// PUT /api/roles/:id - Update a role
+router.put('/:id', roleController.updateRole);
+
+// DELETE /api/roles/:id - Delete a role
+router.delete('/:id', roleController.deleteRole);
+
 module.exports = router;

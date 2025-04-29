@@ -10,6 +10,7 @@ import AllocationsPage from './components/allocations/AllocationsPage';
 import EndingSoonPage from './components/allocations/EndingSoonPage';
 import MatchesPage from './components/matching/MatchesPage';
 import TimelinePage from './components/pages/TimelinePage';
+import RolesPage from './components/admin/RolesPage';
 import './App.css';
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
             <Route path="/ending-soon" element={<EndingSoonPage />} />
             <Route path="/matches" element={<MatchesPage />} />
             <Route path="/timeline" element={<TimelinePage />} />
+            <Route path="/admin/roles" element={<RolesPage />} />
           </Routes>
         </MainLayout>
       </Router>

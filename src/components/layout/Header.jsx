@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Menu, Settings } from 'lucide-react';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   
   return (
     <header className="bg-blue-600 text-white p-4 shadow-md">
@@ -19,7 +20,7 @@ const Header = () => {
         </button>
         
         {/* Desktop Navigation */}
-        <nav className="hidden md:block">
+        <nav className="hidden md:flex items-center space-x-4">
           <ul className="flex space-x-4">
             <li><Link to="/" className="hover:underline">Dashboard</Link></li>
             <li><Link to="/resources" className="hover:underline">Resources</Link></li>
@@ -27,6 +28,29 @@ const Header = () => {
             <li><Link to="/allocations" className="hover:underline">Allocations</Link></li>
             <li><Link to="/timeline" className="hover:underline">Timeline</Link></li>
           </ul>
+          
+          {/* Admin dropdown */}
+          <div className="relative ml-4">
+            <button 
+              className="flex items-center hover:underline"
+              onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
+            >
+              <Settings className="h-5 w-5 mr-1" />
+              <span>Admin</span>
+            </button>
+            
+            {isAdminMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white text-gray-800 rounded shadow-lg z-10">
+                <Link 
+                  to="/admin/roles" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAdminMenuOpen(false)}
+                >
+                  Role Management
+                </Link>
+              </div>
+            )}
+          </div>
         </nav>
         
         {/* Mobile Navigation */}
@@ -71,14 +95,23 @@ const Header = () => {
                   </Link>
                 </li>
                 <li>
-                <Link 
-                  to="/timeline" 
-                  className="block p-2 hover:bg-blue-700 rounded"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Timeline
-                </Link>
-              </li>
+                  <Link 
+                    to="/timeline" 
+                    className="block p-2 hover:bg-blue-700 rounded"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Timeline
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/admin/roles" 
+                    className="block p-2 hover:bg-blue-700 rounded"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Role Management
+                  </Link>
+                </li>
               </ul>
             </nav>
           </div>

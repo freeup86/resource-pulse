@@ -101,7 +101,34 @@ export const ProjectProvider = ({ children }) => {
         throw new Error('Cannot update project without a valid ID');
       }
       
+      console.log('ProjectContext: Updating project with data:', updatedProject);
+      
+      // Check that requiredRoles has the right format
+      if (updatedProject.requiredRoles) {
+        console.log('ProjectContext: Required roles to be sent:', updatedProject.requiredRoles);
+        
+        // Validate required roles format
+        const invalidRoles = updatedProject.requiredRoles.filter(
+          role => typeof role.roleId !== 'number' || typeof role.count !== 'number'
+        );
+        
+        if (invalidRoles.length > 0) {
+          console.error('ProjectContext: Invalid role format detected:', invalidRoles);
+          console.log('ProjectContext: Fixing role format...');
+          
+          // Fix the roles format
+          updatedProject.requiredRoles = updatedProject.requiredRoles.map(role => ({
+            roleId: parseInt(role.roleId),
+            count: parseInt(role.count) || 1
+          }));
+          
+          console.log('ProjectContext: Fixed roles:', updatedProject.requiredRoles);
+        }
+      }
+      
       const project = await projectService.updateProject(updatedProject.id, updatedProject);
+      
+      console.log('ProjectContext: Project updated successfully, response:', project);
       
       // Validate response
       if (!project || !project.id) {
@@ -111,8 +138,13 @@ export const ProjectProvider = ({ children }) => {
       dispatch({ type: 'UPDATE_PROJECT', payload: project });
       return project;
     } catch (err) {
+      console.error('ProjectContext: Error updating project:', err);
+      
+      if (err.response) {
+        console.error('ProjectContext: Error response:', err.response.data);
+      }
+      
       setError('Failed to update project');
-      console.error(err);
       throw err;
     }
   };

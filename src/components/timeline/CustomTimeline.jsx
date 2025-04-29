@@ -384,43 +384,30 @@ const CustomTimeline = () => {
                           
                           return (
                             <div 
-                              key={dIndex}
-                              className={`w-[40px] h-16 border-r border-gray-100 ${
-                                date.getDay() === 0 || date.getDay() === 6 ? 'bg-gray-50' : ''
-                              }`}
+                            key={dIndex}
+                            className={`w-[40px] h-16 border-r border-gray-100 ${
+                              date.getDay() === 0 || date.getDay() === 6 ? 'bg-gray-50' : ''
+                            }`}
+                          >
+                            <div 
+                              className="h-full w-full relative cursor-pointer"
+                              style={{
+                                backgroundColor: `${projectColor}40`, // Add transparency
+                                borderLeft: isFirstDay ? `4px solid ${projectColor}` : 'none'
+                              }}
+                              onMouseEnter={(e) => showTooltip(e, date, allocations)}
+                              onMouseLeave={hideTooltip}
                             >
-                              <div 
-                                className="h-full w-full relative cursor-pointer"
-                                style={{
-                                  backgroundColor: `${projectColor}40`, // Add transparency
-                                  borderLeft: isFirstDay ? `4px solid ${projectColor}` : 'none'
-                                }}
-                                onMouseEnter={(e) => showTooltip(e, date, allocations)}
-                                onMouseLeave={hideTooltip}
-                              >
-                                {/* Show project name for each segment */}
-                                {isFirstDay && (
-                                  <div 
-                                    className="absolute top-0 left-0 text-xs bg-white bg-opacity-90 p-1 z-10 whitespace-nowrap shadow-sm"
-                                    style={{ 
-                                      borderLeft: `4px solid ${projectColor}`,
-                                      maxWidth: '200px',
-                                      overflow: 'visible'
-                                    }}
-                                  >
-                                    {getProjectName(projectId)}
-                                    {allocations.length > 1 ? ` +${allocations.length - 1}` : ''}
-                                  </div>
-                                )}
-                                
-                                {/* Show multiple allocation indicator */}
-                                {allocations.length > 1 && (
-                                  <div className="absolute bottom-1 right-1 bg-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-gray-300">
-                                    {allocations.length}
-                                  </div>
-                                )}
-                              </div>
+                              {/* Remove project name display */}
+                              
+                              {/* Show multiple allocation indicator */}
+                              {allocations.length > 1 && (
+                                <div className="absolute bottom-1 right-1 bg-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-gray-300">
+                                  {allocations.length}
+                                </div>
+                              )}
                             </div>
+                          </div>
                           );
                         })}
                       </div>
@@ -476,35 +463,23 @@ const CustomTimeline = () => {
                         
                         return (
                           <div 
-                            key={dIndex}
-                            className={`w-[40px] h-10 border-r border-gray-100 ${
-                              date.getDay() === 0 || date.getDay() === 6 ? 'bg-gray-50' : ''
-                            }`}
+                          key={dIndex}
+                          className={`w-[40px] h-10 border-r border-gray-100 ${
+                            date.getDay() === 0 || date.getDay() === 6 ? 'bg-gray-50' : ''
+                          }`}
+                        >
+                          <div 
+                            className="h-full w-full relative cursor-pointer"
+                            style={{
+                              backgroundColor: `${row.color}40`, // Add transparency
+                              borderLeft: isFirstDay ? `4px solid ${row.color}` : 'none'
+                            }}
+                            onMouseEnter={(e) => showTooltip(e, date, activeAllocation)}
+                            onMouseLeave={hideTooltip}
                           >
-                            <div 
-                              className="h-full w-full relative cursor-pointer"
-                              style={{
-                                backgroundColor: `${row.color}40`, // Add transparency
-                                borderLeft: isFirstDay ? `4px solid ${row.color}` : 'none'
-                              }}
-                              onMouseEnter={(e) => showTooltip(e, date, activeAllocation)}
-                              onMouseLeave={hideTooltip}
-                            >
-                              {/* Show allocation details on first day */}
-                              {isFirstDay && (
-                                <div 
-                                  className="absolute top-0 left-0 text-xs bg-white bg-opacity-90 p-1 z-10 whitespace-nowrap shadow-sm"
-                                  style={{ 
-                                    borderLeft: `4px solid ${row.color}`,
-                                    maxWidth: '200px',
-                                    overflow: 'visible'
-                                  }}
-                                >
-                                  {activeAllocation.utilization || 0}%
-                                </div>
-                              )}
-                            </div>
+                            {/* Remove allocation details on first day */}
                           </div>
+                        </div>
                         );
                       })}
                     </div>

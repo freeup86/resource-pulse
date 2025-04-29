@@ -32,10 +32,36 @@ export const createProject = async (projectData) => {
 
 export const updateProject = async (id, projectData) => {
   try {
+    console.log('projectService: Updating project with ID:', id);
+    console.log('projectService: Data being sent:', JSON.stringify(projectData, null, 2));
+    
+    // Make sure requiredRoles are properly formatted
+    if (projectData.requiredRoles) {
+      console.log('projectService: Required roles:', projectData.requiredRoles);
+      
+      // Confirm all roleId and count values are numbers
+      projectData.requiredRoles = projectData.requiredRoles.map(role => ({
+        roleId: parseInt(role.roleId),
+        count: parseInt(role.count) || 1
+      }));
+    }
+    
     const response = await api.put(`/projects/${id}`, projectData);
+    console.log('projectService: Update successful, response:', response.data);
     return response.data;
   } catch (error) {
     console.error(`Error updating project ${id}:`, error);
+    
+    // Log more details about the error
+    if (error.response) {
+      console.error('projectService: Error response data:', error.response.data);
+      console.error('projectService: Error response status:', error.response.status);
+    } else if (error.request) {
+      console.error('projectService: No response received:', error.request);
+    } else {
+      console.error('projectService: Error message:', error.message);
+    }
+    
     throw error;
   }
 };

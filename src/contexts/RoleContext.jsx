@@ -1,4 +1,3 @@
-// src/contexts/RoleContext.jsx
 import React, { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import * as roleService from '../services/roleService';
 
@@ -12,6 +11,12 @@ const roleReducer = (state, action) => {
       return action.payload;
     case 'ADD_ROLE':
       return [...state, action.payload];
+    case 'UPDATE_ROLE':
+      return state.map(role => 
+        role.id === action.payload.id ? action.payload : role
+      );
+    case 'DELETE_ROLE':
+      return state.filter(role => role.id !== action.payload);
     default:
       return state;
   }
@@ -54,12 +59,37 @@ export const RoleProvider = ({ children }) => {
     }
   };
 
+  // Update existing role
+  const updateRole = async (updatedRole) => {
+    try {
+      const role = await roleService.updateRole(updatedRole.id, updatedRole);
+      dispatch({ type: 'UPDATE_ROLE', payload: role });
+      return role;
+    } catch (err) {
+      setError('Failed to update role');
+      throw err;
+    }
+  };
+
+  // Delete role
+  const deleteRole = async (roleId) => {
+    try {
+      await roleService.deleteRole(roleId);
+      dispatch({ type: 'DELETE_ROLE', payload: roleId });
+    } catch (err) {
+      setError('Failed to delete role');
+      throw err;
+    }
+  };
+
   return (
     <RoleContext.Provider value={{ 
       roles, 
       loading,
       error,
-      addRole
+      addRole,
+      updateRole,
+      deleteRole
     }}>
       {children}
     </RoleContext.Provider>
