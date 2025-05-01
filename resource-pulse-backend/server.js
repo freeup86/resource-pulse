@@ -11,7 +11,9 @@ const allocationRoutes = require('./routes/allocationRoutes');
 const roleRoutes = require('./routes/roleRoutes');
 const importRoutes = require('./routes/importRoutes');
 const syncRoutes = require('./routes/syncRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 const scheduledSyncService = require('./services/scheduledSyncService');
+const settingsController = require('./controllers/settingsController');
 
 // Load environment variables
 dotenv.config();
@@ -55,6 +57,10 @@ app.use('/api/allocations', allocationRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/settings', settingsRoutes);
+
+// Initialize system settings before starting server
+settingsController.initializeSettings();
 
 // Start scheduled jobs in production mode
 if (process.env.NODE_ENV === 'production') {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useResources } from '../../contexts/ResourceContext';
 import { useProjects } from '../../contexts/ProjectContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { calculateTotalUtilization } from '../../utils/allocationUtils';
 
 const AllocationForm = ({ 
@@ -12,12 +13,17 @@ const AllocationForm = ({
 }) => {
   const { resources, updateAllocation } = useResources();
   const { projects } = useProjects();
+  const { getMaxUtilization, getDefaultAllocation } = useSettings();
+  
+  // Get system-configured max utilization threshold
+  const systemMaxUtilization = getMaxUtilization();
+  
   const [formData, setFormData] = useState({
     resourceId: resourceId || '',
     projectId: projectId || '',
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
-    utilization: 100
+    utilization: getDefaultAllocation()
   });
   const [errors, setErrors] = useState({});
 
@@ -32,10 +38,10 @@ const AllocationForm = ({
   const currentTotalUtilization = resource ? 
     calculateTotalUtilization(resource) - (allocation ? (allocation.utilization || 0) : 0) : 0;
   
-  // Set maximum available utilization
+  // Set maximum available utilization, allowing overallocation up to the admin-defined threshold
   const availableUtilization = maxUtilization !== null ? 
     maxUtilization : 
-    Math.max(0, 100 - currentTotalUtilization);
+    Math.max(0, systemMaxUtilization - currentTotalUtilization);
 
   // Format date for input without adding a day
   const formatDateForInput = (dateString) => {
@@ -61,7 +67,7 @@ const AllocationForm = ({
         projectId: allocation.projectId || (allocation.project ? allocation.project.id : ''),
         startDate: allocation.startDate ? formatDateForInput(allocation.startDate) : new Date().toISOString().split('T')[0],
         endDate: allocation.endDate ? formatDateForInput(allocation.endDate) : '',
-        utilization: allocation.utilization || 100,
+        utilization: allocation.utilization || getDefaultAllocation(),
         id: allocation.id // Save the allocation ID for updates
       });
     } else if (resourceId || projectId) {
@@ -73,7 +79,7 @@ const AllocationForm = ({
         utilization: Math.min(prev.utilization, availableUtilization)
       }));
     }
-  }, [allocation, resourceId, projectId, availableUtilization]);
+  }, [allocation, resourceId, projectId, availableUtilization, getDefaultAllocation]);
 
   // Auto-populate start and end dates from project when project is selected
   useEffect(() => {
@@ -121,9 +127,12 @@ const AllocationForm = ({
     if (!formData.resourceId) newErrors.resourceId = 'Resource is required';
     if (!formData.projectId) newErrors.projectId = 'Project is required';
     if (!formData.endDate) newErrors.endDate = 'End date is required';
+    
+    // Validate utilization against the admin-defined threshold
     if (formData.utilization < 1 || formData.utilization > availableUtilization) {
       newErrors.utilization = `Utilization must be between 1 and ${availableUtilization}`;
     }
+    
     if (formData.startDate && formData.endDate && new Date(formData.startDate) > new Date(formData.endDate)) {
       newErrors.endDate = 'End date must be after start date';
     }
@@ -154,7 +163,7 @@ const AllocationForm = ({
       console.error('Error in allocation form submission:', err);
       if (err.response && err.response.status === 400) {
         setErrors({
-          submit: err.response.data?.message || 'Failed to allocate resource. Allocation would exceed 100% utilization.'
+          submit: err.response.data?.message || `Failed to allocate resource. Allocation would exceed ${systemMaxUtilization}% utilization.`
         });
       } else {
         setErrors({
@@ -199,18 +208,15 @@ const AllocationForm = ({
     
     if (allocations.length === 0) {
       return 'Unallocated';
+    } else if (totalUtilization > systemMaxUtilization) {
+      return `${allocations.length} allocation${allocations.length !== 1 ? 's' : ''} (${totalUtilization}% total - Overallocated)`;
     } else {
       return `${allocations.length} allocation${allocations.length !== 1 ? 's' : ''} (${totalUtilization}% total)`;
     }
   };
 
-  // Get available resources (exclude fully allocated if adding a new allocation)
-  const availableResources = resources.filter(r => {
-    if (allocation && r.id === parseInt(resourceId)) return true;
-    
-    const rUtilization = calculateTotalUtilization(r);
-    return rUtilization < 100;
-  });
+  // Get all resources - no filtering so fully allocated resources are included
+  const availableResources = resources;
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -232,11 +238,19 @@ const AllocationForm = ({
               disabled={!!resourceId}
             >
               <option value="">Select a resource</option>
-              {availableResources.map(resource => (
-                <option key={resource.id} value={resource.id}>
-                  {resource.name} - {resource.role} ({formatAllocationStatus(resource)})
-                </option>
-              ))}
+              {availableResources.map(resource => {
+                const utilization = calculateTotalUtilization(resource);
+                return (
+                  <option key={resource.id} value={resource.id}>
+                    {resource.name} - {resource.role} 
+                    {utilization >= systemMaxUtilization 
+                      ? ` (${utilization}% - Overallocated)` 
+                      : utilization >= 100 
+                        ? ` (${utilization}% - Fully Allocated)` 
+                        : ` (${utilization}% allocated)`}
+                  </option>
+                );
+              })}
             </select>
             {errors.resourceId && <p className="mt-1 text-sm text-red-600">{errors.resourceId}</p>}
           </div>
@@ -286,18 +300,33 @@ const AllocationForm = ({
           
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Utilization (%) - Available: {availableUtilization}%
+              Utilization (%)
+              {resourceId && (
+                <span className="ml-1 text-xs">
+                  - Available: {availableUtilization}%
+                </span>
+              )}
             </label>
             <input
               type="number"
               name="utilization"
               min="1"
-              max={availableUtilization}
+              max={resourceId ? availableUtilization : systemMaxUtilization}
               value={formData.utilization}
               onChange={handleChange}
               className={`w-full p-2 border rounded ${errors.utilization ? 'border-red-500' : 'border-gray-300'}`}
             />
             {errors.utilization && <p className="mt-1 text-sm text-red-600">{errors.utilization}</p>}
+            {formData.resourceId && !resourceId && (
+              <p className="mt-1 text-xs text-gray-500">
+                Selected resource: {formatAllocationStatus(resources.find(r => r.id === parseInt(formData.resourceId)))}
+              </p>
+            )}
+            {systemMaxUtilization > 100 && (
+              <p className="mt-1 text-xs text-yellow-600">
+                Note: System allows overallocation up to {systemMaxUtilization}%
+              </p>
+            )}
           </div>
           
           {errors.submit && (

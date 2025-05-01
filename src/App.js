@@ -14,6 +14,7 @@ import RolesPage from './components/admin/RolesPage';
 import ImportPage from './components/admin/ImportPage';
 import ExportPage from './components/admin/ExportPage';
 import SyncPage from './components/admin/SyncPage';
+import SettingsPage from './components/admin/SettingsPage';
 import AnalyticsDashboard from './components/analytics/AnalyticsDashboard';
 import './App.css';
 
@@ -36,6 +37,7 @@ function App() {
             <Route path="/admin/import" element={<ImportPage />} />
             <Route path="/admin/export" element={<ExportPage />} />
             <Route path="/admin/sync" element={<SyncPage />} />
+            <Route path="/admin/settings" element={<SettingsPage />} />
             <Route path="/analytics" element={<AnalyticsDashboard />} />
           </Routes>
         </MainLayout>

@@ -70,6 +70,13 @@ const Header = () => {
                 >
                   External Sync
                 </Link>
+                <Link 
+                  to="/admin/settings" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAdminMenuOpen(false)}
+                >
+                  System Settings
+                </Link>
               </div>
             )}
           </div>
@@ -159,6 +166,15 @@ const Header = () => {
                     onClick={() => setIsAdminMenuOpen(false)}
                   >
                     External Sync
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/admin/settings" 
+                    className="block px-4 py-2 hover:bg-blue-100"
+                    onClick={() => setIsAdminMenuOpen(false)}
+                  >
+                    System Settings
                   </Link>
                 </li>
                 <li>
