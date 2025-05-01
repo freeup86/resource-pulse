@@ -9,12 +9,38 @@ const ExcelImport = ({ onImportData, dataType }) => {
   const [mappings, setMappings] = useState({});
   const [headers, setHeaders] = useState([]);
   
-  // Define required fields for each data type
-  const requiredFields = {
-    resources: ['name', 'role'],
-    projects: ['name', 'client'],
-    allocations: ['resourceId', 'projectId', 'startDate', 'endDate', 'utilization']
+  // Define fields for each data type
+  const fieldDefinitions = {
+    resources: [
+      { name: 'name', required: true, description: 'Full name of the resource' },
+      { name: 'role', required: true, description: 'Job role or position' },
+      { name: 'email', required: false, description: 'Email address' },
+      { name: 'phone', required: false, description: 'Phone number' },
+      { name: 'skills', required: false, description: 'Comma-separated list of skills' }
+    ],
+    projects: [
+      { name: 'name', required: true, description: 'Project name' },
+      { name: 'client', required: true, description: 'Client name' },
+      { name: 'description', required: false, description: 'Project description' },
+      { name: 'startDate', required: false, description: 'Start date (YYYY-MM-DD)' },
+      { name: 'endDate', required: false, description: 'End date (YYYY-MM-DD)' },
+      { name: 'requiredSkills', required: false, description: 'Comma-separated list of required skills' },
+      { name: 'requiredRoles', required: false, description: 'JSON format: [{"roleId":1,"count":2},{"roleId":3,"count":1}]' },
+      { name: 'status', required: false, description: 'Project status (default: Active)' }
+    ],
+    allocations: [
+      { name: 'resourceId', required: true, description: 'Resource ID number' },
+      { name: 'projectId', required: true, description: 'Project ID number' },
+      { name: 'startDate', required: true, description: 'Start date (YYYY-MM-DD)' },
+      { name: 'endDate', required: true, description: 'End date (YYYY-MM-DD)' },
+      { name: 'utilization', required: true, description: 'Utilization percentage (1-100)' }
+    ]
   };
+  
+  // Get required fields
+  const requiredFields = fieldDefinitions[dataType]
+    .filter(field => field.required)
+    .map(field => field.name);
   
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -46,8 +72,12 @@ const ExcelImport = ({ onImportData, dataType }) => {
           excelHeaders.forEach((header, index) => {
             // Try to auto-match headers (case-insensitive)
             const lowerHeader = header.toLowerCase();
-            if (requiredFields[dataType].includes(lowerHeader)) {
-              initialMappings[lowerHeader] = index;
+            const matchingField = fieldDefinitions[dataType].find(
+              field => field.name.toLowerCase() === lowerHeader
+            );
+            
+            if (matchingField) {
+              initialMappings[matchingField.name] = index;
             }
           });
           setMappings(initialMappings);
@@ -79,7 +109,7 @@ const ExcelImport = ({ onImportData, dataType }) => {
     }
     
     // Validate mappings
-    const missingFields = requiredFields[dataType].filter(field => mappings[field] === undefined);
+    const missingFields = requiredFields.filter(field => mappings[field] === undefined);
     if (missingFields.length > 0) {
       setError(`Missing mappings for required fields: ${missingFields.join(', ')}`);
       return;
@@ -102,10 +132,12 @@ const ExcelImport = ({ onImportData, dataType }) => {
           const mappedData = data.map(row => {
             const mappedRow = {};
             
-            // Map each required field
-            Object.entries(mappings).forEach(([field, headerIndex]) => {
-              const headerName = headers[headerIndex];
-              mappedRow[field] = row[headerName];
+            // Map each field
+            fieldDefinitions[dataType].forEach(field => {
+              if (mappings[field.name] !== undefined) {
+                const headerName = headers[mappings[field.name]];
+                mappedRow[field.name] = row[headerName];
+              }
             });
             
             return mappedRow;
@@ -140,9 +172,117 @@ const ExcelImport = ({ onImportData, dataType }) => {
     }
   };
   
+  const downloadTemplate = () => {
+    // Get all fields for this data type
+    const fields = fieldDefinitions[dataType];
+    
+    // Use regular field names for headers
+    const headers = fields.map(field => field.name);
+    
+    // Create a row that marks which fields are required
+    const requiredMarkers = fields.map(field => 
+      field.required ? "REQUIRED" : "optional"
+    );
+    
+    // Create descriptions row
+    const descriptions = fields.map(field => field.description);
+    
+    // Create worksheet with headers
+    const worksheet = XLSX.utils.aoa_to_sheet([headers]);
+    
+    // Add required/optional row
+    XLSX.utils.sheet_add_aoa(worksheet, [requiredMarkers], {origin: "A2"});
+    
+    // Add descriptions row
+    XLSX.utils.sheet_add_aoa(worksheet, [descriptions], {origin: "A3"});
+    
+    // Add sample data row
+    const sampleData = [];
+    fields.forEach(field => {
+      switch(field.name) {
+        case 'name': 
+          sampleData.push('John Doe');
+          break;
+        case 'role':
+          sampleData.push('Software Developer');
+          break;
+        case 'email':
+          sampleData.push('john.doe@example.com');
+          break;
+        case 'phone':
+          sampleData.push('123-456-7890');
+          break;
+        case 'skills':
+          sampleData.push('JavaScript,React,Node.js');
+          break;
+        case 'client':
+          sampleData.push('ACME Corporation');
+          break;
+        case 'description':
+          sampleData.push('Project description goes here');
+          break;
+        case 'startDate':
+          sampleData.push('2025-05-01');
+          break;
+        case 'endDate':
+          sampleData.push('2025-12-31');
+          break;
+        case 'requiredSkills':
+          sampleData.push('JavaScript,React,Node.js');
+          break;
+        case 'status':
+          sampleData.push('Active');
+          break;
+        case 'resourceId':
+          sampleData.push('1');
+          break;
+        case 'projectId':
+          sampleData.push('1');
+          break;
+        case 'utilization':
+          sampleData.push('100');
+          break;
+        case 'requiredRoles':
+          sampleData.push('[{"roleId":1,"count":2},{"roleId":3,"count":1}]');
+          break;
+        default:
+          sampleData.push('');
+      }
+    });
+    
+    // Add the sample data
+    XLSX.utils.sheet_add_aoa(worksheet, [sampleData], {origin: "A4"});
+    
+    // Add a note at the top about deleting instruction rows
+    const note = [["INSTRUCTIONS: The first row contains field names. The second row indicates which fields are required. The third row explains each field. Please DELETE ROWS 2-3 AND this row before uploading and keep only the header row and your data."]];
+    XLSX.utils.sheet_add_aoa(worksheet, note, {origin: "A5"});
+    
+    // Create workbook and add worksheet
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, dataType);
+    
+    // Generate filename
+    const fileName = `${dataType}_template.xlsx`;
+    
+    // Save file
+    XLSX.writeFile(workbook, fileName);
+  };
+  
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-xl font-semibold mb-4">Import {dataType}</h2>
+      
+      <div className="mb-4">
+        <button
+          onClick={downloadTemplate}
+          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 mb-4"
+        >
+          Download Template
+        </button>
+        <p className="text-sm text-gray-600 mt-2">
+          * Required fields are highlighted in red in the template
+        </p>
+      </div>
       
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -200,15 +340,20 @@ const ExcelImport = ({ onImportData, dataType }) => {
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            {requiredFields[dataType].map(field => (
-              <div key={field} className="mb-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {field} *
+            {fieldDefinitions[dataType].map(field => (
+              <div key={field.name} className="mb-2">
+                <label className={`block text-sm font-medium mb-1 ${field.required ? 'text-red-600' : 'text-gray-700'}`}>
+                  {field.name} {field.required && '*'}
+                  <span className="text-xs text-gray-500 ml-1">({field.description})</span>
                 </label>
                 <select
-                  value={mappings[field] || ''}
-                  onChange={(e) => handleMappingChange(field, e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded"
+                  value={mappings[field.name] || ''}
+                  onChange={(e) => handleMappingChange(field.name, e.target.value)}
+                  className={`w-full p-2 border rounded ${
+                    field.required && !mappings[field.name] 
+                      ? 'border-red-500' 
+                      : 'border-gray-300'
+                  }`}
                 >
                   <option value="">-- Select Column --</option>
                   {headers.map((header, index) => (

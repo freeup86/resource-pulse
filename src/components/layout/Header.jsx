@@ -27,6 +27,7 @@ const Header = () => {
             <li><Link to="/projects" className="hover:underline">Projects</Link></li>
             <li><Link to="/allocations" className="hover:underline">Allocations</Link></li>
             <li><Link to="/timeline" className="hover:underline">Timeline</Link></li>
+            <li><Link to="/analytics" className="hover:underline">Analytics</Link></li>
           </ul>
           
           {/* Admin dropdown */}
@@ -47,6 +48,27 @@ const Header = () => {
                   onClick={() => setIsAdminMenuOpen(false)}
                 >
                   Role Management
+                </Link>
+                <Link 
+                  to="/admin/import" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAdminMenuOpen(false)}
+                >
+                  Import Data
+                </Link>
+                <Link 
+                  to="/admin/export" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAdminMenuOpen(false)}
+                >
+                  Export Data
+                </Link>
+                <Link 
+                  to="/admin/sync" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAdminMenuOpen(false)}
+                >
+                  External Sync
                 </Link>
               </div>
             )}
@@ -111,6 +133,36 @@ const Header = () => {
                   >
                     Role Management
                   </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/admin/import" 
+                    className="block p-2 hover:bg-blue-700 rounded"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Import Data
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/admin/export" 
+                    className="block px-4 py-2 hover:bg-blue-100"
+                    onClick={() => setIsAdminMenuOpen(false)}
+                  >
+                    Export Data
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/admin/sync" 
+                    className="block px-4 py-2 hover:bg-blue-100"
+                    onClick={() => setIsAdminMenuOpen(false)}
+                  >
+                    External Sync
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/analytics" className="hover:underline">Analytics</Link>
                 </li>
               </ul>
             </nav>

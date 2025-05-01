@@ -219,11 +219,26 @@ export const ResourceProvider = ({ children }) => {
     }
   };
 
+  const refreshResources = async () => {
+    try {
+      setLoading(true);
+      const data = await resourceService.getResources();
+      dispatch({ type: 'SET_RESOURCES', payload: data });
+      setError(null);
+    } catch (err) {
+      setError('Failed to fetch resources');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <ResourceContext.Provider value={{ 
       resources, 
       loading,
       error,
+      refreshResources,
       addResource: async (resource) => {
         try {
           const newResource = await resourceService.createResource(resource);

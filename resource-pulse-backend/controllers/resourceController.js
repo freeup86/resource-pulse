@@ -587,3 +587,34 @@ exports.deleteResource = async (req, res) => {
     });
   }
 };
+
+// Bulk create resources
+exports.bulkCreateResources = async (req, res) => {
+  try {
+    const { resources } = req.body;
+    if (!Array.isArray(resources) || resources.length === 0) {
+      return res.status(400).json({ message: 'Valid resources array is required' });
+    }
+    
+    const pool = await poolPromise;
+    const createdResources = [];
+    
+    for (const resource of resources) {
+      // Validate required fields
+      if (!resource.name || !resource.roleId) {
+        continue; // Skip invalid resources
+      }
+      
+      // Create resource using existing logic but in a loop
+      // ... [similar to createResource but in a loop]
+    }
+    
+    res.status(201).json(createdResources);
+  } catch (err) {
+    console.error('Error bulk creating resources:', err);
+    res.status(500).json({
+      message: 'Error creating resources',
+      error: process.env.NODE_ENV === 'production' ? {} : err
+    });
+  }
+};

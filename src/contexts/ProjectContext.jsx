@@ -165,6 +165,29 @@ export const ProjectProvider = ({ children }) => {
     }
   };
 
+  const refreshProjects = async () => {
+    try {
+      setLoading(true);
+      const data = await projectService.getProjects();
+      
+      // Additional validation before dispatching
+      if (!Array.isArray(data)) {
+        console.error('Fetched projects is not an array', data);
+        dispatch({ type: 'SET_PROJECTS', payload: [] });
+      } else {
+        dispatch({ type: 'SET_PROJECTS', payload: data });
+      }
+      
+      setError(null);
+    } catch (err) {
+      setError('Failed to fetch projects');
+      console.error(err);
+      dispatch({ type: 'SET_PROJECTS', payload: [] });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <ProjectContext.Provider value={{ 
       projects, 
@@ -172,7 +195,8 @@ export const ProjectProvider = ({ children }) => {
       error,
       addProject, 
       updateProject, 
-      deleteProject 
+      deleteProject,
+      refreshProjects
     }}>
       {children}
     </ProjectContext.Provider>

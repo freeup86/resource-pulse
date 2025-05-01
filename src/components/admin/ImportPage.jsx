@@ -2,15 +2,18 @@ import React, { useState } from 'react';
 import ExcelImport from './ExcelImport';
 import { useResources } from '../../contexts/ResourceContext';
 import { useProjects } from '../../contexts/ProjectContext';
-import * as resourceService from '../../services/resourceService';
-import * as projectService from '../../services/projectService';
-import * as allocationService from '../../services/allocationService';
+import { useRoles } from '../../contexts/RoleContext';
+import * as importService from '../../services/importService';
+import * as exportService from '../../services/exportService';
+import { FileDown } from 'lucide-react';
 
 const ImportPage = () => {
-  const { refreshResources } = useResources();
-  const { refreshProjects } = useProjects();
+  const { refreshResources, resources } = useResources();
+  const { refreshProjects, projects } = useProjects();
+  const { roles } = useRoles();
   const [importType, setImportType] = useState('resources');
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [results, setResults] = useState(null);
 
   // Handle importing resources
@@ -19,42 +22,11 @@ const ImportPage = () => {
     setResults(null);
     
     try {
-      const results = {
-        total: data.length,
-        successful: 0,
-        failed: 0,
-        errors: []
-      };
-      
-      // Process each resource
-      for (const item of data) {
-        try {
-          // Map the data to the API format
-          const resourceData = {
-            name: item.name,
-            roleId: item.roleId || getRoleIdByName(item.role),
-            email: item.email || null,
-            phone: item.phone || null,
-            skills: Array.isArray(item.skills) ? item.skills : 
-              (item.skills ? item.skills.split(',').map(s => s.trim()) : [])
-          };
-          
-          // Create the resource
-          await resourceService.createResource(resourceData);
-          results.successful++;
-        } catch (err) {
-          results.failed++;
-          results.errors.push({
-            item,
-            error: err.message || 'Unknown error'
-          });
-        }
-      }
+      const response = await importService.importResources(data);
+      setResults(response);
       
       // Refresh resources in context
       await refreshResources();
-      
-      setResults(results);
     } catch (err) {
       console.error('Import error:', err);
       setResults({
@@ -74,44 +46,40 @@ const ImportPage = () => {
     setResults(null);
     
     try {
-      const results = {
-        total: data.length,
-        successful: 0,
-        failed: 0,
-        errors: []
-      };
-      
-      // Process each project
-      for (const item of data) {
-        try {
-          // Map the data to the API format
-          const projectData = {
-            name: item.name,
-            client: item.client,
-            description: item.description || null,
-            startDate: item.startDate || null,
-            endDate: item.endDate || null,
-            status: item.status || 'Active',
-            requiredSkills: Array.isArray(item.requiredSkills) ? item.requiredSkills : 
-              (item.requiredSkills ? item.requiredSkills.split(',').map(s => s.trim()) : [])
-          };
-          
-          // Create the project
-          await projectService.createProject(projectData);
-          results.successful++;
-        } catch (err) {
-          results.failed++;
-          results.errors.push({
-            item,
-            error: err.message || 'Unknown error'
-          });
+      // Process requiredRoles if present
+      const processedData = data.map(project => {
+        if (project.requiredRoles) {
+          try {
+            // Parse JSON string if it's a string
+            if (typeof project.requiredRoles === 'string') {
+              project.requiredRoles = JSON.parse(project.requiredRoles);
+            }
+            
+            // Validate the structure
+            if (!Array.isArray(project.requiredRoles)) {
+              project.requiredRoles = [];
+            }
+            
+            // Ensure each role has roleId and count as numbers
+            project.requiredRoles = project.requiredRoles
+              .filter(role => role && role.roleId)
+              .map(role => ({
+                roleId: parseInt(role.roleId),
+                count: parseInt(role.count) || 1
+              }));
+          } catch (err) {
+            console.warn('Failed to parse requiredRoles:', err);
+            project.requiredRoles = [];
+          }
         }
-      }
+        return project;
+      });
+      
+      const response = await importService.importProjects(processedData);
+      setResults(response);
       
       // Refresh projects in context
       await refreshProjects();
-      
-      setResults(results);
     } catch (err) {
       console.error('Import error:', err);
       setResults({
@@ -131,44 +99,11 @@ const ImportPage = () => {
     setResults(null);
     
     try {
-      const results = {
-        total: data.length,
-        successful: 0,
-        failed: 0,
-        errors: []
-      };
-      
-      // Process each allocation
-      for (const item of data) {
-        try {
-          // Map the data to the API format
-          const allocationData = {
-            resourceId: parseInt(item.resourceId),
-            projectId: parseInt(item.projectId),
-            startDate: item.startDate,
-            endDate: item.endDate,
-            utilization: parseInt(item.utilization)
-          };
-          
-          // Create the allocation
-          await allocationService.updateAllocation(
-            allocationData.resourceId, 
-            allocationData
-          );
-          results.successful++;
-        } catch (err) {
-          results.failed++;
-          results.errors.push({
-            item,
-            error: err.message || 'Unknown error'
-          });
-        }
-      }
+      const response = await importService.importAllocations(data);
+      setResults(response);
       
       // Refresh resources to get updated allocations
       await refreshResources();
-      
-      setResults(results);
     } catch (err) {
       console.error('Import error:', err);
       setResults({
@@ -180,13 +115,6 @@ const ImportPage = () => {
     } finally {
       setImporting(false);
     }
-  };
-  
-  // Helper to get role ID by name (mock implementation)
-  const getRoleIdByName = (roleName) => {
-    // This should be implemented to look up role ID by name
-    // For now, return a fallback ID
-    return 1;
   };
   
   // Handle import based on selected type
@@ -203,47 +131,77 @@ const ImportPage = () => {
     }
   };
   
+  // Export reference data
+  const handleExportReferenceData = async () => {
+    try {
+      setExporting(true);
+      await exportService.exportAllReferenceData();
+      alert('Reference data has been exported successfully!');
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Failed to export reference data. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+  
   return (
     <div>
       <h2 className="text-xl font-semibold mb-6">Import Data</h2>
       
       <div className="mb-6">
-        <div className="flex space-x-4 mb-4">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setImportType('resources')}
+              className={`px-4 py-2 rounded-md ${
+                importType === 'resources' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Resources
+            </button>
+            <button
+              onClick={() => setImportType('projects')}
+              className={`px-4 py-2 rounded-md ${
+                importType === 'projects' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Projects
+            </button>
+            <button
+              onClick={() => setImportType('allocations')}
+              className={`px-4 py-2 rounded-md ${
+                importType === 'allocations' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Allocations
+            </button>
+          </div>
+          
+          {/* Export Reference Data Button */}
           <button
-            onClick={() => setImportType('resources')}
-            className={`px-4 py-2 rounded-md ${
-              importType === 'resources' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+            onClick={handleExportReferenceData}
+            disabled={exporting}
+            className="bg-green-600 text-white px-4 py-2 rounded flex items-center hover:bg-green-700 disabled:opacity-50"
           >
-            Resources
-          </button>
-          <button
-            onClick={() => setImportType('projects')}
-            className={`px-4 py-2 rounded-md ${
-              importType === 'projects' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            Projects
-          </button>
-          <button
-            onClick={() => setImportType('allocations')}
-            className={`px-4 py-2 rounded-md ${
-              importType === 'allocations' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            Allocations
+            <FileDown className="h-4 w-4 mr-2" />
+            {exporting ? 'Exporting...' : 'Export Reference Data'}
           </button>
         </div>
         
         <ExcelImport 
           onImportData={handleImport} 
-          dataType={importType} 
+          dataType={importType}
+          roles={roles}
+          resources={resources}
+          projects={projects}
+          exportService={exportService}
         />
       </div>
       
@@ -266,7 +224,7 @@ const ImportPage = () => {
             </div>
           </div>
           
-          {results.errors.length > 0 && (
+          {results.errors && results.errors.length > 0 && (
             <div className="mt-4">
               <h4 className="font-medium mb-2">Errors:</h4>
               <div className="max-h-40 overflow-y-auto">
@@ -274,7 +232,7 @@ const ImportPage = () => {
                   {results.errors.map((error, idx) => (
                     <li key={idx} className="text-sm text-red-600 mb-1">
                       {error.item ? 
-                        `Row with ${error.item.name || 'Unknown'}: ${error.error}` :
+                        `Row with ${error.item}: ${error.error}` :
                         error.error}
                     </li>
                   ))}
@@ -300,7 +258,26 @@ const ImportPage = () => {
           <h4 className="font-medium text-blue-700 mb-1">Projects Format</h4>
           <ul className="list-disc pl-5">
             <li>Required fields: <span className="font-mono">name</span>, <span className="font-mono">client</span></li>
-            <li>Optional fields: <span className="font-mono">description</span>, <span className="font-mono">startDate</span>, <span className="font-mono">endDate</span>, <span className="font-mono">requiredSkills</span> (comma-separated)</li>
+            <li>Optional fields: 
+              <ul className="list-disc pl-5 mt-1">
+                <li><span className="font-mono">description</span> - Project description</li>
+                <li><span className="font-mono">startDate</span> - Start date (YYYY-MM-DD)</li>
+                <li><span className="font-mono">endDate</span> - End date (YYYY-MM-DD)</li>
+                <li><span className="font-mono">requiredSkills</span> - Comma-separated list of skills</li>
+                <li><span className="font-mono">requiredRoles</span> - JSON format array of role requirements:
+                  <pre className="bg-gray-100 p-2 mt-1 rounded text-xs overflow-auto">
+                    {`[
+  {"roleId": 1, "count": 2},
+  {"roleId": 3, "count": 1}
+]`}
+                  </pre>
+                  <span className="text-xs block mt-1">
+                    Where <span className="font-mono">roleId</span> is the ID of the role and <span className="font-mono">count</span> is the number of resources needed
+                  </span>
+                </li>
+                <li><span className="font-mono">status</span> - Project status (default: Active)</li>
+              </ul>
+            </li>
           </ul>
         </div>
         
@@ -311,6 +288,92 @@ const ImportPage = () => {
             <li><span className="font-mono">startDate</span> and <span className="font-mono">endDate</span> should be in YYYY-MM-DD format</li>
             <li><span className="font-mono">utilization</span> should be a number between 1 and 100</li>
           </ul>
+        </div>
+        
+        {/* Reference Data section */}
+        <div className="mt-6 pt-6 border-t border-blue-200">
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="font-medium text-blue-700">Reference Data</h4>
+            <div className="flex space-x-2">
+              <button 
+                onClick={() => exportService.exportRoles()}
+                className="bg-blue-600 text-white px-3 py-1 text-sm rounded flex items-center hover:bg-blue-700"
+              >
+                <FileDown className="h-3 w-3 mr-1" /> Export Roles
+              </button>
+              <button 
+                onClick={() => exportService.exportResources()}
+                className="bg-blue-600 text-white px-3 py-1 text-sm rounded flex items-center hover:bg-blue-700"
+              >
+                <FileDown className="h-3 w-3 mr-1" /> Export Resources
+              </button>
+              <button 
+                onClick={() => exportService.exportProjects()}
+                className="bg-blue-600 text-white px-3 py-1 text-sm rounded flex items-center hover:bg-blue-700"
+              >
+                <FileDown className="h-3 w-3 mr-1" /> Export Projects
+              </button>
+            </div>
+          </div>
+          
+          <p className="text-sm text-gray-600 mb-4">
+            Use the export buttons to download reference files that map IDs to names. This is useful when preparing imports that require specific IDs.
+          </p>
+          
+          {importType === 'projects' && (
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
+              <h4 className="font-medium text-yellow-800 mb-1">Available Roles</h4>
+              <p className="text-sm mb-2">Use these role IDs for the requiredRoles field:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {roles.map(role => (
+                  <div key={role.id} className="bg-white p-2 rounded border border-gray-200 text-sm">
+                    <span className="font-mono">ID: {role.id}</span> - {role.name}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {importType === 'allocations' && (
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
+              <h4 className="font-medium text-yellow-800 mb-1">ID References for Allocations</h4>
+              <p className="text-sm mb-2">You'll need these IDs for allocation imports:</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                <div>
+                  <h5 className="font-medium text-sm mb-2">Resources (First 10)</h5>
+                  <div className="bg-white p-2 rounded border border-gray-200 max-h-40 overflow-y-auto">
+                    {resources.slice(0, 10).map(resource => (
+                      <div key={resource.id} className="text-sm py-1 border-b border-gray-100 last:border-0">
+                        <strong>{resource.id}:</strong> {resource.name}
+                      </div>
+                    ))}
+                    {resources.length > 10 && (
+                      <div className="text-xs text-center text-gray-500 mt-1">
+                        + {resources.length - 10} more... Export for complete list
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div>
+                  <h5 className="font-medium text-sm mb-2">Projects (First 10)</h5>
+                  <div className="bg-white p-2 rounded border border-gray-200 max-h-40 overflow-y-auto">
+                    {projects.slice(0, 10).map(project => (
+                      <div key={project.id} className="text-sm py-1 border-b border-gray-100 last:border-0">
+                        <strong>{project.id}:</strong> {project.name}
+                      </div>
+                    ))}
+                    {projects.length > 10 && (
+                      <div className="text-xs text-center text-gray-500 mt-1">
+                        + {projects.length - 10} more... Export for complete list
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

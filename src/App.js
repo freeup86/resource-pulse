@@ -11,6 +11,10 @@ import EndingSoonPage from './components/allocations/EndingSoonPage';
 import MatchesPage from './components/matching/MatchesPage';
 import TimelinePage from './components/pages/TimelinePage';
 import RolesPage from './components/admin/RolesPage';
+import ImportPage from './components/admin/ImportPage';
+import ExportPage from './components/admin/ExportPage';
+import SyncPage from './components/admin/SyncPage';
+import AnalyticsDashboard from './components/analytics/AnalyticsDashboard';
 import './App.css';
 
 function App() {
@@ -29,6 +33,10 @@ function App() {
             <Route path="/matches" element={<MatchesPage />} />
             <Route path="/timeline" element={<TimelinePage />} />
             <Route path="/admin/roles" element={<RolesPage />} />
+            <Route path="/admin/import" element={<ImportPage />} />
+            <Route path="/admin/export" element={<ExportPage />} />
+            <Route path="/admin/sync" element={<SyncPage />} />
+            <Route path="/analytics" element={<AnalyticsDashboard />} />
           </Routes>
         </MainLayout>
       </Router>

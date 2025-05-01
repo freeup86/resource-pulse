@@ -191,3 +191,18 @@ exports.deleteRole = async (req, res) => {
     });
   }
 };
+
+// Get role by name
+exports.getRoleByName = async (transaction, roleName) => {
+  if (!roleName) return null;
+  
+  const roleResult = await transaction.request()
+    .input('roleName', sql.NVarChar, roleName)
+    .query(`
+      SELECT RoleID as id, Name as name
+      FROM Roles 
+      WHERE Name = @roleName
+    `);
+  
+  return roleResult.recordset.length > 0 ? roleResult.recordset[0] : null;
+};
