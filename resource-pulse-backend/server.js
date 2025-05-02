@@ -12,8 +12,12 @@ const roleRoutes = require('./routes/roleRoutes');
 const importRoutes = require('./routes/importRoutes');
 const syncRoutes = require('./routes/syncRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const capacityRoutes = require('./routes/capacityRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 const scheduledSyncService = require('./services/scheduledSyncService');
 const settingsController = require('./controllers/settingsController');
+const notificationService = require('./services/notificationService');
+const notificationScheduler = require('./services/notificationScheduler');
 
 // Load environment variables
 dotenv.config();
@@ -58,13 +62,28 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/capacity', capacityRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Initialize system settings before starting server
 settingsController.initializeSettings();
 
+// Initialize notification service
+notificationService.initializeService().then(success => {
+  if (success) {
+    console.log('Notification service initialized successfully');
+  } else {
+    console.error('Failed to initialize notification service');
+  }
+});
+
 // Start scheduled jobs in production mode
 if (process.env.NODE_ENV === 'production') {
   scheduledSyncService.initializeJobs();
+  notificationScheduler.initializeScheduledJobs();
+} else {
+  // In development, still initialize notification jobs but with console logs
+  notificationScheduler.initializeScheduledJobs();
 }
 
 // Error handler

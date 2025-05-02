@@ -59,12 +59,29 @@ export const SettingsProvider = ({ children }) => {
     }
   };
 
+  // Utility functions to access common settings
+  const getMaxUtilization = () => {
+    return settings.maxUtilizationPercentage || 100;
+  };
+
+  const getDefaultAllocation = () => {
+    return 100; // Default allocation percentage
+  };
+
+  const getAllowOverallocation = () => {
+    return settings.allowOverallocation || false;
+  };
+
   return (
     <SettingsContext.Provider value={{ 
       settings, 
       loading,
       error,
-      updateSettings
+      updateSettings,
+      // Add utility functions to the context
+      getMaxUtilization,
+      getDefaultAllocation,
+      getAllowOverallocation
     }}>
       {children}
     </SettingsContext.Provider>

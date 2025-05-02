@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, Settings } from 'lucide-react';
+import NotificationCenter from '../notifications/NotificationCenter';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -11,13 +12,20 @@ const Header = () => {
       <div className="container mx-auto flex justify-between items-center">
         <Link to="/" className="text-2xl font-bold">ResourcePulse</Link>
         
-        {/* Mobile menu button */}
-        <button 
-          className="md:hidden"
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-        >
-          <Menu className="h-6 w-6" />
-        </button>
+        <div className="flex items-center md:hidden">
+          {/* Mobile notification center */}
+          <div className="mr-4">
+            <NotificationCenter />
+          </div>
+          
+          {/* Mobile menu button */}
+          <button 
+            className="md:hidden"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+        </div>
         
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-4">
@@ -27,8 +35,14 @@ const Header = () => {
             <li><Link to="/projects" className="hover:underline">Projects</Link></li>
             <li><Link to="/allocations" className="hover:underline">Allocations</Link></li>
             <li><Link to="/timeline" className="hover:underline">Timeline</Link></li>
+            <li><Link to="/capacity" className="hover:underline">Capacity</Link></li>
             <li><Link to="/analytics" className="hover:underline">Analytics</Link></li>
           </ul>
+          
+          {/* Notification Center */}
+          <div className="relative mx-4">
+            <NotificationCenter />
+          </div>
           
           {/* Admin dropdown */}
           <div className="relative ml-4">
@@ -130,6 +144,15 @@ const Header = () => {
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Timeline
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/capacity" 
+                    className="block p-2 hover:bg-blue-700 rounded"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Capacity
                   </Link>
                 </li>
                 <li>

@@ -4,6 +4,7 @@ import { ResourceProvider } from './ResourceContext';
 import { ProjectProvider } from './ProjectContext';
 import { RoleProvider } from './RoleContext';
 import { SettingsProvider } from './SettingsContext';
+import { CapacityProvider } from './CapacityContext';
 
 const AppProvider = ({ children }) => {
   return (
@@ -11,7 +12,9 @@ const AppProvider = ({ children }) => {
       <ResourceProvider>
         <ProjectProvider>
           <RoleProvider>
-            {children}
+            <CapacityProvider>
+              {children}
+            </CapacityProvider>
           </RoleProvider>
         </ProjectProvider>
       </ResourceProvider>

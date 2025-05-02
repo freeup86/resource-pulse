@@ -16,6 +16,10 @@ import ExportPage from './components/admin/ExportPage';
 import SyncPage from './components/admin/SyncPage';
 import SettingsPage from './components/admin/SettingsPage';
 import AnalyticsDashboard from './components/analytics/AnalyticsDashboard';
+import CapacityPlanningPage from './components/capacity/CapacityPlanningPage';
+import NotificationsListPage from './components/notifications/NotificationsListPage';
+import NotificationPage from './components/notifications/NotificationPage';
+import NotificationSettingsPage from './components/notifications/NotificationSettingsPage';
 import './App.css';
 
 function App() {
@@ -33,12 +37,16 @@ function App() {
             <Route path="/ending-soon" element={<EndingSoonPage />} />
             <Route path="/matches" element={<MatchesPage />} />
             <Route path="/timeline" element={<TimelinePage />} />
+            <Route path="/capacity" element={<CapacityPlanningPage />} />
             <Route path="/admin/roles" element={<RolesPage />} />
             <Route path="/admin/import" element={<ImportPage />} />
             <Route path="/admin/export" element={<ExportPage />} />
             <Route path="/admin/sync" element={<SyncPage />} />
             <Route path="/admin/settings" element={<SettingsPage />} />
             <Route path="/analytics" element={<AnalyticsDashboard />} />
+            <Route path="/notifications/settings" element={<NotificationSettingsPage />} />
+            <Route path="/notifications/:id" element={<NotificationPage />} />
+            <Route path="/notifications" element={<NotificationsListPage />} />
           </Routes>
         </MainLayout>
       </Router>

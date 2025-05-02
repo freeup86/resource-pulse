@@ -1,4 +1,25 @@
+// allocationController.js
 const { poolPromise, sql } = require('../db/config');
+
+// Helper function to get the maximum utilization percentage from settings
+const getMaxUtilizationPercentage = async (pool) => {
+  try {
+    const result = await pool.request()
+      .query(`
+        SELECT SettingValue 
+        FROM SystemSettings 
+        WHERE SettingKey = 'maxUtilizationPercentage'
+      `);
+    
+    if (result.recordset.length > 0) {
+      return parseInt(result.recordset[0].SettingValue) || 100;
+    }
+    return 100; // Default value if setting not found
+  } catch (err) {
+    console.error('Error fetching max utilization setting:', err);
+    return 100; // Default value on error
+  }
+};
 
 // Create or update an allocation
 const updateAllocation = async (req, res) => {
@@ -28,13 +49,16 @@ const updateAllocation = async (req, res) => {
     }
     
     // Validate utilization
-    if (utilization < 1 || utilization > 100) {
+    if (utilization < 1 || utilization > 150) { // Increased upper limit to 150 as a safeguard
       return res.status(400).json({ 
-        message: 'Utilization must be between 1 and 100' 
+        message: 'Utilization must be between 1 and 150' 
       });
     }
     
     const pool = await poolPromise;
+    
+    // Get the max utilization percentage from settings
+    const maxUtilizationPercentage = await getMaxUtilizationPercentage(pool);
     
     // Start a transaction
     const transaction = new sql.Transaction(pool);
@@ -74,7 +98,7 @@ const updateAllocation = async (req, res) => {
         return res.status(400).json({ message: 'Start date must be before or equal to end date' });
       }
       
-      // Check utilization constraint
+      // Check utilization constraint against system setting
       const utilizationCheck = await transaction.request()
         .input('resourceId', sql.Int, resourceId)
         .input('startDate', sql.Date, startDateObj)
@@ -92,10 +116,11 @@ const updateAllocation = async (req, res) => {
       
       const existingUtilization = utilizationCheck.recordset[0].TotalUtilization || 0;
       
-      if (existingUtilization + utilization > 100) {
+      // Use the max utilization from settings instead of hardcoded 100
+      if (existingUtilization + utilization > maxUtilizationPercentage) {
         await transaction.rollback();
         return res.status(400).json({ 
-          message: `This allocation would exceed 100% utilization. Current utilization: ${existingUtilization}%` 
+          message: `This allocation would exceed ${maxUtilizationPercentage}% utilization. Current utilization in this period: ${existingUtilization}%` 
         });
       }
       
@@ -491,368 +516,6 @@ const removeAllocation = async (req, res) => {
   }
 };
 
-// Create or update an allocation
-exports.updateAllocation = async (req, res) => {
-  try {
-    const { resourceId } = req.params;
-    const { projectId, startDate, endDate, utilization, id } = req.body;
-    
-    // Handle removing allocation if projectId is null
-    if (projectId === null && id) {
-      return await removeAllocation(req, res, id);
-    }
-    
-    // Validate required fields
-    if (!resourceId || !projectId || !startDate || !endDate || !utilization) {
-      return res.status(400).json({ 
-        message: 'Resource ID, project ID, start date, end date, and utilization are required' 
-      });
-    }
-    
-    if (utilization < 1 || utilization > 100) {
-      return res.status(400).json({ 
-        message: 'Utilization must be between 1 and 100' 
-      });
-    }
-    
-    const pool = await poolPromise;
-    
-    // Check if resource exists
-    const resourceCheck = await pool.request()
-      .input('resourceId', sql.Int, resourceId)
-      .query(`
-        SELECT ResourceID FROM Resources WHERE ResourceID = @resourceId
-      `);
-    
-    if (resourceCheck.recordset.length === 0) {
-      return res.status(404).json({ message: 'Resource not found' });
-    }
-    
-    // Check if project exists
-    const projectCheck = await pool.request()
-      .input('projectId', sql.Int, projectId)
-      .query(`
-        SELECT ProjectID FROM Projects WHERE ProjectID = @projectId
-      `);
-    
-    if (projectCheck.recordset.length === 0) {
-      return res.status(404).json({ message: 'Project not found' });
-    }
-    
-    // Check total utilization for this time period
-    // We need to make sure the total utilization doesn't exceed 100%
-    // But we exclude the current allocation if we're updating one
-    const utilizationCheck = await pool.request()
-      .input('resourceId', sql.Int, resourceId)
-      .input('startDate', sql.Date, new Date(startDate))
-      .input('endDate', sql.Date, new Date(endDate))
-      .input('allocationId', sql.Int, id || 0)
-      .query(`
-        SELECT SUM(Utilization) AS TotalUtilization
-        FROM Allocations
-        WHERE ResourceID = @resourceId
-        AND AllocationID != @allocationId
-        AND (
-          (StartDate <= @endDate AND EndDate >= @startDate)
-        )
-      `);
-    
-    const existingUtilization = utilizationCheck.recordset[0].TotalUtilization || 0;
-    
-    if (existingUtilization + utilization > 100) {
-      return res.status(400).json({ 
-        message: `This allocation would exceed 100% utilization. Current utilization in this period: ${existingUtilization}%` 
-      });
-    }
-    
-    // Start a transaction
-    const transaction = new sql.Transaction(pool);
-    await transaction.begin();
-    
-    try {
-      let allocationId;
-      
-      if (id) {
-        // Update existing allocation
-        await transaction.request()
-          .input('allocationId', sql.Int, id)
-          .input('resourceId', sql.Int, resourceId)
-          .input('projectId', sql.Int, projectId)
-          .input('startDate', sql.Date, new Date(startDate))
-          .input('endDate', sql.Date, new Date(endDate))
-          .input('utilization', sql.Int, utilization)
-          .input('updatedAt', sql.DateTime2, new Date())
-          .query(`
-            UPDATE Allocations
-            SET ProjectID = @projectId,
-                StartDate = @startDate,
-                EndDate = @endDate,
-                Utilization = @utilization,
-                UpdatedAt = @updatedAt
-            WHERE AllocationID = @allocationId
-            AND ResourceID = @resourceId
-          `);
-          
-        allocationId = id;
-      } else {
-        // Create new allocation
-        const result = await transaction.request()
-          .input('resourceId', sql.Int, resourceId)
-          .input('projectId', sql.Int, projectId)
-          .input('startDate', sql.Date, new Date(startDate))
-          .input('endDate', sql.Date, new Date(endDate))
-          .input('utilization', sql.Int, utilization)
-          .query(`
-            INSERT INTO Allocations (ResourceID, ProjectID, StartDate, EndDate, Utilization)
-            OUTPUT INSERTED.AllocationID
-            VALUES (@resourceId, @projectId, @startDate, @endDate, @utilization)
-          `);
-          
-        allocationId = result.recordset[0].AllocationID;
-      }
-      
-      // Commit transaction
-      await transaction.commit();
-      
-      // Get the updated allocation
-      const allocationResult = await pool.request()
-        .input('allocationId', sql.Int, allocationId)
-        .query(`
-          SELECT 
-            a.AllocationID as id,
-            a.ResourceID as resourceId,
-            a.ProjectID as projectId,
-            p.Name as projectName,
-            a.StartDate as startDate,
-            a.EndDate as endDate,
-            a.Utilization as utilization
-          FROM Allocations a
-          INNER JOIN Projects p ON a.ProjectID = p.ProjectID
-          WHERE a.AllocationID = @allocationId
-        `);
-      
-      if (allocationResult.recordset.length === 0) {
-        return res.status(404).json({ message: 'Allocation not found after update' });
-      }
-      
-      // Format the response for the client
-      const allocation = allocationResult.recordset[0];
-      
-      // Add project object for compatibility with frontend
-      allocation.project = {
-        id: allocation.projectId,
-        name: allocation.projectName
-      };
-      
-      res.json(allocation);
-    } catch (err) {
-      // Rollback transaction on error
-      await transaction.rollback();
-      throw err;
-    }
-  } catch (err) {
-    console.error('Error updating allocation:', err);
-    res.status(500).json({
-      message: 'Error updating allocation',
-      error: process.env.NODE_ENV === 'production' ? {} : err
-    });
-  }
-};
-
-// Get all allocations for a resource
-exports.getResourceAllocations = async (req, res) => {
-  try {
-    const { resourceId } = req.params;
-    const pool = await poolPromise;
-    
-    // Check if resource exists
-    const resourceCheck = await pool.request()
-      .input('resourceId', sql.Int, resourceId)
-      .query(`
-        SELECT ResourceID FROM Resources WHERE ResourceID = @resourceId
-      `);
-    
-    if (resourceCheck.recordset.length === 0) {
-      return res.status(404).json({ message: 'Resource not found' });
-    }
-    
-    // Get all allocations for this resource
-    const result = await pool.request()
-      .input('resourceId', sql.Int, resourceId)
-      .query(`
-        SELECT 
-          a.AllocationID as id,
-          a.ResourceID as resourceId,
-          a.ProjectID as projectId,
-          p.Name as projectName,
-          a.StartDate as startDate,
-          a.EndDate as endDate,
-          a.Utilization as utilization
-        FROM Allocations a
-        INNER JOIN Projects p ON a.ProjectID = p.ProjectID
-        WHERE a.ResourceID = @resourceId
-        AND a.EndDate >= GETDATE()
-        ORDER BY a.StartDate
-      `);
-    
-    // Format the response
-    const allocations = result.recordset.map(allocation => ({
-      ...allocation,
-      project: {
-        id: allocation.projectId,
-        name: allocation.projectName
-      }
-    }));
-    
-    res.json(allocations);
-  } catch (err) {
-    console.error('Error getting resource allocations:', err);
-    res.status(500).json({
-      message: 'Error retrieving resource allocations',
-      error: process.env.NODE_ENV === 'production' ? {} : err
-    });
-  }
-};
-
-exports.getResourcesEndingSoon = async (req, res) => {
-  try {
-    const pool = await poolPromise;
-    const daysThreshold = req.query.days ? parseInt(req.query.days) : 14;
-    
-    // Calculate the date threshold
-    const today = new Date();
-    const thresholdDate = new Date();
-    thresholdDate.setDate(today.getDate() + daysThreshold);
-    
-    // Get resources and their ending allocations
-    const result = await pool.request()
-      .input('today', sql.Date, today)
-      .input('thresholdDate', sql.Date, thresholdDate)
-      .query(`
-        SELECT 
-          r.ResourceID, 
-          r.Name, 
-          r.Role,
-          a.AllocationID,
-          a.ProjectID,
-          p.Name AS ProjectName,
-          a.StartDate,
-          a.EndDate,
-          a.Utilization,
-          DATEDIFF(day, GETDATE(), a.EndDate) AS DaysLeft
-        FROM Resources r
-        INNER JOIN Allocations a ON r.ResourceID = a.ResourceID
-        INNER JOIN Projects p ON a.ProjectID = p.ProjectID
-        WHERE a.EndDate >= @today
-        AND a.EndDate <= @thresholdDate
-        ORDER BY a.EndDate ASC
-      `);
-    
-    // Group by resource
-    const resourceMap = {};
-    
-    for (const row of result.recordset) {
-      const resourceId = row.ResourceID;
-      
-      if (!resourceMap[resourceId]) {
-        // Get skills for this resource
-        const skillsResult = await pool.request()
-          .input('resourceId', sql.Int, resourceId)
-          .query(`
-            SELECT s.Name
-            FROM Skills s
-            INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
-            WHERE rs.ResourceID = @resourceId
-          `);
-        
-        resourceMap[resourceId] = {
-          id: resourceId,
-          name: row.Name,
-          role: row.Role,
-          skills: skillsResult.recordset.map(skill => skill.Name),
-          allocations: []
-        };
-      }
-      
-      // Add this allocation
-      resourceMap[resourceId].allocations.push({
-        id: row.AllocationID,
-        projectId: row.ProjectID,
-        project: {
-          id: row.ProjectID,
-          name: row.ProjectName
-        },
-        startDate: row.StartDate,
-        endDate: row.EndDate,
-        utilization: row.Utilization,
-        daysLeft: row.DaysLeft
-      });
-    }
-    
-    // Convert to array and sort by earliest ending allocation
-    const resources = Object.values(resourceMap).map(resource => {
-      // Sort allocations by end date
-      resource.allocations.sort((a, b) => a.daysLeft - b.daysLeft);
-      
-      // For backwards compatibility
-      if (resource.allocations.length > 0) {
-        resource.allocation = resource.allocations[0];
-      } else {
-        resource.allocation = null;
-      }
-      
-      return resource;
-    });
-    
-    res.json(resources);
-  } catch (err) {
-    console.error('Error getting resources ending soon:', err);
-    res.status(500).json({
-      message: 'Error retrieving resources ending soon',
-      error: process.env.NODE_ENV === 'production' ? {} : err
-    });
-  }
-};
-
-// Get resource-project matches based on skills
-exports.getResourceMatches = async (req, res) => {
-  try {
-    const pool = await poolPromise;
-    const { projectId } = req.query;
-    
-    // If projectId is provided, get matches for specific project
-    if (projectId) {
-      const matches = await getMatchesForProject(pool, parseInt(projectId));
-      return res.json(matches);
-    }
-    
-    // Otherwise, get matches for all active projects
-    const projectsResult = await pool.request()
-      .query(`
-        SELECT ProjectID
-        FROM Projects
-        WHERE Status = 'Active'
-      `);
-    
-    const allMatches = [];
-    
-    for (const project of projectsResult.recordset) {
-      const matches = await getMatchesForProject(pool, project.ProjectID);
-      if (matches.resources.length > 0) {
-        allMatches.push(matches);
-      }
-    }
-    
-    res.json(allMatches);
-  } catch (err) {
-    console.error('Error getting resource matches:', err);
-    res.status(500).json({
-      message: 'Error retrieving resource matches',
-      error: process.env.NODE_ENV === 'production' ? {} : err
-    });
-  }
-};
-
 // Helper function to get matches for a specific project
 const getMatchesForProject = async (pool, projectId) => {
   // Get project details
@@ -919,10 +582,14 @@ const getMatchesForProject = async (pool, projectId) => {
     allocatedCounts[row.RoleID] = row.AllocatedCount;
   });
   
+  // Get max utilization from settings
+  const maxUtilization = await getMaxUtilizationPercentage(pool);
+  
   // Find resources with matching skills OR matching roles
   const matchingResourcesResult = await pool.request()
     .input('projectId', sql.Int, projectId)
     .input('thresholdDate', sql.Date, new Date(new Date().setDate(new Date().getDate() + 14)))
+    .input('maxUtilization', sql.Int, maxUtilization)
     .query(`
       WITH ResourceUtilization AS (
         SELECT 
@@ -950,7 +617,7 @@ const getMatchesForProject = async (pool, projectId) => {
         r.RoleID,
         ru.TotalUtilization,
         CASE 
-          WHEN ru.TotalUtilization IS NULL OR ru.TotalUtilization < 100 THEN 'available'
+          WHEN ru.TotalUtilization IS NULL OR ru.TotalUtilization < @maxUtilization THEN 'available'
           WHEN EXISTS (
             SELECT 1 FROM Allocations a 
             WHERE a.ResourceID = r.ResourceID 
@@ -976,7 +643,7 @@ const getMatchesForProject = async (pool, projectId) => {
       LEFT JOIN ResourceUtilization ru ON r.ResourceID = ru.ResourceID
       WHERE 
         ru.TotalUtilization IS NULL OR 
-        ru.TotalUtilization < 100 OR
+        ru.TotalUtilization < @maxUtilization OR
         EXISTS (
           SELECT 1 FROM Allocations a 
           WHERE a.ResourceID = r.ResourceID 
@@ -986,8 +653,8 @@ const getMatchesForProject = async (pool, projectId) => {
       ORDER BY
         CASE 
           WHEN ru.TotalUtilization IS NULL THEN 0
-          WHEN ru.TotalUtilization < 100 THEN ru.TotalUtilization
-          ELSE 100
+          WHEN ru.TotalUtilization < @maxUtilization THEN ru.TotalUtilization
+          ELSE @maxUtilization
         END,
         COALESCE(
           (SELECT MIN(a.EndDate)
@@ -1132,11 +799,11 @@ const getMatchesForProject = async (pool, projectId) => {
   };
 };
 
-// Export all methods
+// Exports
 module.exports = {
-  updateAllocation: require('./allocationController').updateAllocation,
-  getResourceAllocations: require('./allocationController').getResourceAllocations,
-  getResourcesEndingSoon: require('./allocationController').getResourcesEndingSoon,
-  getResourceMatches: require('./allocationController').getResourceMatches,
+  updateAllocation,
+  getResourceAllocations,
+  getResourcesEndingSoon,
+  getResourceMatches,
   removeAllocation
 };
