@@ -13,17 +13,17 @@ const AllocationForm = ({
 }) => {
   const { resources, updateAllocation } = useResources();
   const { projects } = useProjects();
-  const { getMaxUtilization, getDefaultAllocation } = useSettings();
+  const { settings } = useSettings();
   
-  // Get system-configured max utilization threshold
-  const systemMaxUtilization = getMaxUtilization();
+  // Get system-configured max utilization threshold from settings directly
+  const systemMaxUtilization = settings.maxUtilizationPercentage || 100;
   
   const [formData, setFormData] = useState({
     resourceId: resourceId || '',
     projectId: projectId || '',
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
-    utilization: getDefaultAllocation()
+    utilization: settings.defaultAllocationPercentage || 100
   });
   const [errors, setErrors] = useState({});
 
@@ -67,7 +67,7 @@ const AllocationForm = ({
         projectId: allocation.projectId || (allocation.project ? allocation.project.id : ''),
         startDate: allocation.startDate ? formatDateForInput(allocation.startDate) : new Date().toISOString().split('T')[0],
         endDate: allocation.endDate ? formatDateForInput(allocation.endDate) : '',
-        utilization: allocation.utilization || getDefaultAllocation(),
+        utilization: allocation.utilization || (settings.defaultAllocationPercentage || 100),
         id: allocation.id // Save the allocation ID for updates
       });
     } else if (resourceId || projectId) {
@@ -79,7 +79,7 @@ const AllocationForm = ({
         utilization: Math.min(prev.utilization, availableUtilization)
       }));
     }
-  }, [allocation, resourceId, projectId, availableUtilization, getDefaultAllocation]);
+  }, [allocation, resourceId, projectId, availableUtilization, settings]);
 
   // Auto-populate start and end dates from project when project is selected
   useEffect(() => {
@@ -128,7 +128,7 @@ const AllocationForm = ({
     if (!formData.projectId) newErrors.projectId = 'Project is required';
     if (!formData.endDate) newErrors.endDate = 'End date is required';
     
-    // Validate utilization against the admin-defined threshold
+    // Validate utilization against the system-defined threshold
     if (formData.utilization < 1 || formData.utilization > availableUtilization) {
       newErrors.utilization = `Utilization must be between 1 and ${availableUtilization}`;
     }
