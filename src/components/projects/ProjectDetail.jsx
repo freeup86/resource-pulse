@@ -2,15 +2,48 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useResources } from '../../contexts/ResourceContext';
 import { useRoles } from '../../contexts/RoleContext';
+import { useSkills } from '../../contexts/SkillsContext';
 import { formatDate, calculateDaysUntilEnd } from '../../utils/dateUtils';
 import UtilizationBar from '../common/UtilizationBar';
+import SkillTag from '../common/SkillTag';
 import AllocationForm from '../allocations/AllocationForm';
+import SkillRecommendationForm from '../skills/SkillRecommendationForm';
+import ProjectFinancials from './ProjectFinancials';
+import AiRecommendationDisplay from './AiRecommendationDisplay';
+import { generateRecommendations, saveRecommendation } from '../../services/aiRecommendationService';
+import api from '../../services/api';
 
 const ProjectDetail = ({ project }) => {
   const { resources } = useResources();
   const { roles } = useRoles();
+  const { skills } = useSkills();
   const [showAllocationForm, setShowAllocationForm] = useState(false);
+  const [showRecommendationForm, setShowRecommendationForm] = useState(false);
+  const [selectedSkillId, setSelectedSkillId] = useState(null);
   const [roleAssignments, setRoleAssignments] = useState([]);
+  const [aiRecommendations, setAiRecommendations] = useState([]);
+  const [showAiRecommendations, setShowAiRecommendations] = useState(false);
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+  const [savedRecommendations, setSavedRecommendations] = useState([]);
+  
+  // Fetch saved recommendations when project changes
+  useEffect(() => {
+    if (project && project.id) {
+      fetchSavedRecommendations();
+    }
+  }, [project]);
+  
+  // Function to fetch saved recommendations
+  const fetchSavedRecommendations = async () => {
+    try {
+      const response = await api.get(`/projects/${project.id}/skill-recommendations`);
+      if (response.data && response.data.success) {
+        setSavedRecommendations(response.data.recommendations || []);
+      }
+    } catch (error) {
+      console.error('Error fetching recommendations:', error);
+    }
+  };
   
   if (!project) {
     return <div className="text-center p-8">Project not found</div>;
@@ -84,11 +117,83 @@ const ProjectDetail = ({ project }) => {
     };
   });
 
-  // When the "Allocate Resources" button is clicked
-  const handleAddAllocation = () => {
-    setShowAllocationForm(true);
+  // Handle adding skill development recommendation
+  const handleAddRecommendation = (skillId) => {
+    setSelectedSkillId(skillId);
+    setShowRecommendationForm(true);
   };
   
+  // Handle generating AI recommendations
+  const handleGenerateAiRecommendations = async () => {
+    if (!project.id) return;
+    
+    try {
+      setIsLoadingRecommendations(true);
+      const recommendations = await generateRecommendations(project.id);
+      setAiRecommendations(recommendations);
+      setShowAiRecommendations(true);
+    } catch (error) {
+      console.error('Error generating AI recommendations:', error);
+      alert('Failed to generate recommendations. Please try again later.');
+    } finally {
+      setIsLoadingRecommendations(false);
+    }
+  };
+  
+  // Handle saving an AI recommendation
+  const handleSaveAiRecommendation = async (recommendation) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Find the skill ID
+        const skillObj = skills.find(s => s.name === recommendation.skillName);
+        
+        if (!skillObj) {
+          console.error('Skill not found:', recommendation.skillName);
+          alert(`Could not find the skill "${recommendation.skillName}" in the system.`);
+          reject(new Error('Skill not found'));
+          return;
+        }
+        
+        // Prepare the recommendation data
+        const recommendationData = {
+          projectId: project.id,
+          skillId: skillObj.id,
+          title: recommendation.title,
+          description: recommendation.description,
+          resourceUrl: recommendation.resourceUrl,
+          estimatedTimeHours: recommendation.estimatedTimeHours,
+          cost: recommendation.cost,
+          aiGenerated: true
+        };
+        
+        // Call API to save the recommendation
+        await saveRecommendation(project.id, recommendationData);
+        
+        // Fetch the updated list of recommendations
+        await fetchSavedRecommendations();
+        
+        // Success! Close the modal if it's the last recommendation
+        if (aiRecommendations.length === 1) {
+          setShowAiRecommendations(false);
+        }
+        
+        // Remove the saved recommendation from the AI recommendations list
+        setAiRecommendations(prev => 
+          prev.filter(rec => rec.skillName !== recommendation.skillName)
+        );
+        
+        // Notify user of success
+        alert('Recommendation saved successfully!');
+        
+        resolve();
+      } catch (error) {
+        console.error('Error saving recommendation:', error);
+        alert('Failed to save recommendation. Please try again.');
+        reject(error);
+      }
+    });
+  };
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="p-6">
@@ -184,17 +289,70 @@ const ProjectDetail = ({ project }) => {
           </div>
         )}
         
+        {/* Required Skills Section */}
         <div className="mt-6">
-          <h3 className="text-lg font-medium text-gray-900">Required Skills</h3>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium text-gray-900">Required Skills</h3>
+            <div className="flex space-x-2">
+              <button
+                onClick={handleGenerateAiRecommendations}
+                disabled={isLoadingRecommendations || !project.requiredSkills || project.requiredSkills.length === 0}
+                className={`flex items-center px-3 py-1 text-sm rounded ${
+                  isLoadingRecommendations || !project.requiredSkills || project.requiredSkills.length === 0
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                }`}
+              >
+                {isLoadingRecommendations ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <span>AI Suggest Development</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2 mt-2">
-            {project.requiredSkills.map((skill, idx) => (
-              <span key={idx} className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                {skill}
-              </span>
-            ))}
+            {project.requiredSkills && project.requiredSkills.length > 0 ? (
+              project.requiredSkills.map((skill, idx) => {
+                // Find the skill object to get additional info if available
+                const skillObj = typeof skill === 'string' 
+                  ? skills.find(s => s.name === skill) 
+                  : skills.find(s => s.name === skill.name);
+                
+                const skillName = typeof skill === 'string' ? skill : skill.name;
+                
+                return (
+                  <div key={`skill-${idx}`} className="relative group">
+                    <SkillTag 
+                      skill={skillName}
+                      proficiency={typeof skill === 'object' ? skill.proficiencyLevel : null}
+                      category={skillObj?.category}
+                      onClick={() => handleAddRecommendation(skillObj?.id)}
+                    />
+                    <div className="hidden group-hover:block absolute z-10 -bottom-7 left-0 bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                      Click to add recommendation
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-gray-500">No specific skills required</p>
+            )}
           </div>
         </div>
         
+        {/* Allocated Resources Section */}
         <div className="mt-6">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-medium text-gray-900">Allocated Resources</h3>
@@ -276,6 +434,146 @@ const ProjectDetail = ({ project }) => {
             </div>
           )}
         </div>
+        
+        {/* Skill Development Recommendations Section */}
+        <div className="mt-6">
+          <h3 className="text-lg font-medium text-gray-900">Skill Development Recommendations</h3>
+          <div className="mt-2">
+            {savedRecommendations.length > 0 || (project.skillRecommendations && project.skillRecommendations.length > 0) ? (
+              <div className="space-y-3">
+                {/* Display saved recommendations from our API */}
+                {savedRecommendations.map((rec) => (
+                  <div key={`saved-rec-${rec.id}`} className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex justify-between">
+                      <h4 className="font-medium">{rec.title}</h4>
+                      <span className="text-sm text-gray-600">
+                        {rec.estimatedTimeHours && `${rec.estimatedTimeHours} hours`}
+                        {rec.cost && rec.estimatedTimeHours && ' • '}
+                        {rec.cost && `$${rec.cost}`}
+                        {rec.aiGenerated && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            AI Generated
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600">Skill: {rec.skillName}</p>
+                    {rec.description && <p className="mt-1 text-sm">{rec.description}</p>}
+                    {rec.resourceUrl && (
+                      <a 
+                        href={rec.resourceUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-block text-sm text-blue-600 hover:underline"
+                      >
+                        View Resource
+                      </a>
+                    )}
+                  </div>
+                ))}
+                
+                {/* Display traditional project recommendations if they exist */}
+                {project.skillRecommendations && project.skillRecommendations.map((rec, idx) => (
+                  <div key={`rec-${idx}`} className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex justify-between">
+                      <h4 className="font-medium">{rec.title}</h4>
+                      <span className="text-sm text-gray-600">
+                        {rec.estimatedTimeHours && `${rec.estimatedTimeHours} hours`}
+                        {rec.cost && rec.estimatedTimeHours && ' • '}
+                        {rec.cost && `$${rec.cost}`}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600">Skill: {rec.skillName}</p>
+                    {rec.description && <p className="mt-1 text-sm">{rec.description}</p>}
+                    {rec.resourceUrl && (
+                      <a 
+                        href={rec.resourceUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-block text-sm text-blue-600 hover:underline"
+                      >
+                        View Resource
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-gray-50 p-4 rounded-lg text-center">
+                <p className="text-gray-500">No skill development recommendations added yet</p>
+                <div className="flex justify-center space-x-2 mt-2">
+                  <button 
+                    onClick={() => setShowRecommendationForm(true)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                  >
+                    Add Recommendation
+                  </button>
+                  
+                  {project.requiredSkills && project.requiredSkills.length > 0 && (
+                    <button 
+                      onClick={handleGenerateAiRecommendations}
+                      disabled={isLoadingRecommendations}
+                      className={`flex items-center px-4 py-2 rounded ${
+                        isLoadingRecommendations 
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-purple-600 text-white hover:bg-purple-700'
+                      }`}
+                    >
+                      {isLoadingRecommendations ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                          </svg>
+                          <span>AI Suggest</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Financial Information Section */}
+        <div className="mt-8 p-4 border rounded-lg">
+          <ProjectFinancials 
+            project={{
+              ...project,
+              // Ensure allocatedResources is passed to ProjectFinancials
+              allocatedResources: assignedResources.map(resource => {
+                // Find the allocation for this project
+                const allocationForProject = resource.allocations 
+                  ? resource.allocations.find(a => a && a.projectId === project.id)
+                  : (resource.allocation && resource.allocation.projectId === project.id 
+                      ? resource.allocation 
+                      : null);
+                
+                if (!allocationForProject) return null;
+                
+                return {
+                  id: resource.id,
+                  name: resource.name,
+                  role: resource.roleName || resource.role,
+                  utilization: allocationForProject.utilization,
+                  hourlyRate: resource.hourlyRate || allocationForProject.hourlyRate,
+                  billableRate: resource.billableRate || allocationForProject.billableRate,
+                  totalHours: allocationForProject.totalHours,
+                  totalCost: allocationForProject.totalCost,
+                  billableAmount: allocationForProject.billableAmount
+                };
+              }).filter(Boolean)
+            }} 
+          />
+        </div>
       </div>
       
       {showAllocationForm && (
@@ -283,6 +581,29 @@ const ProjectDetail = ({ project }) => {
           projectId={project.id}
           onClose={() => setShowAllocationForm(false)}
         />
+      )}
+      
+      {showRecommendationForm && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <SkillRecommendationForm 
+            skillId={selectedSkillId}
+            onClose={() => {
+              setShowRecommendationForm(false);
+              setSelectedSkillId(null);
+            }}
+          />
+        </div>
+      )}
+      
+      {showAiRecommendations && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <AiRecommendationDisplay 
+            recommendations={aiRecommendations}
+            onSave={handleSaveAiRecommendation}
+            onCancel={() => setShowAiRecommendations(false)}
+            isLoading={isLoadingRecommendations}
+          />
+        </div>
       )}
     </div>
   );

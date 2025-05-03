@@ -25,7 +25,18 @@ const getMaxUtilizationPercentage = async (pool) => {
 const updateAllocation = async (req, res) => {
   try {
     const { resourceId } = req.params;
-    const { projectId, startDate, endDate, utilization } = req.body;
+    const { 
+      projectId, 
+      startDate, 
+      endDate, 
+      utilization,
+      // Financial parameters
+      hourlyRate,
+      billableRate,
+      totalHours,
+      isBillable,
+      billingType
+    } = req.body;
     
     // Validate input parameters
     if (!resourceId) {
@@ -65,17 +76,26 @@ const updateAllocation = async (req, res) => {
     await transaction.begin();
     
     try {
-      // Check if resource exists
+      // Check if resource exists and get hourly rate if not provided
       const resourceCheck = await transaction.request()
         .input('resourceId', sql.Int, resourceId)
         .query(`
-          SELECT ResourceID FROM Resources WHERE ResourceID = @resourceId
+          SELECT 
+            ResourceID, 
+            HourlyRate,
+            BillableRate
+          FROM Resources 
+          WHERE ResourceID = @resourceId
         `);
       
       if (resourceCheck.recordset.length === 0) {
         await transaction.rollback();
         return res.status(404).json({ message: 'Resource not found' });
       }
+      
+      // Get resource hourly and billable rates if not provided
+      const resourceHourlyRate = hourlyRate || resourceCheck.recordset[0].HourlyRate;
+      const resourceBillableRate = billableRate || resourceCheck.recordset[0].BillableRate;
       
       // Check if project exists
       const projectCheck = await transaction.request()
@@ -124,6 +144,31 @@ const updateAllocation = async (req, res) => {
         });
       }
       
+      // Calculate financial metrics
+      
+      // Calculate workdays between dates (excluding weekends)
+      const daysDiff = await transaction.request()
+        .input('startDate', sql.Date, startDateObj)
+        .input('endDate', sql.Date, endDateObj)
+        .query(`
+          SELECT 
+            DATEDIFF(day, @startDate, @endDate) + 1 AS TotalDays,
+            DATEDIFF(day, @startDate, @endDate) + 1 - 
+            (2 * DATEDIFF(week, @startDate, @endDate)) AS WorkDays
+        `);
+      
+      const workDays = daysDiff.recordset[0].WorkDays;
+      
+      // Calculate total allocation hours (8 hours per workday * utilization percentage)
+      const calculatedTotalHours = workDays * 8 * (utilization / 100);
+      const allocationTotalHours = totalHours || calculatedTotalHours;
+      
+      // Calculate financial amounts
+      const allocationIsBillable = isBillable === undefined ? true : isBillable;
+      const totalCost = resourceHourlyRate ? resourceHourlyRate * allocationTotalHours : null;
+      const billableAmount = allocationIsBillable && resourceBillableRate ? 
+        resourceBillableRate * allocationTotalHours : null;
+      
       // Check for existing allocation to this project
       const existingAllocation = await transaction.request()
         .input('resourceId', sql.Int, resourceId)
@@ -144,12 +189,26 @@ const updateAllocation = async (req, res) => {
           .input('startDate', sql.Date, startDateObj)
           .input('endDate', sql.Date, endDateObj)
           .input('utilization', sql.Int, utilization)
+          .input('hourlyRate', sql.Decimal(10, 2), resourceHourlyRate)
+          .input('billableRate', sql.Decimal(10, 2), resourceBillableRate)
+          .input('totalHours', sql.Int, allocationTotalHours)
+          .input('totalCost', sql.Decimal(14, 2), totalCost)
+          .input('billableAmount', sql.Decimal(14, 2), billableAmount)
+          .input('isBillable', sql.Bit, allocationIsBillable)
+          .input('billingType', sql.NVarChar(50), billingType || 'Hourly')
           .input('updatedAt', sql.DateTime2, new Date())
           .query(`
             UPDATE Allocations
             SET StartDate = @startDate,
                 EndDate = @endDate,
                 Utilization = @utilization,
+                HourlyRate = @hourlyRate,
+                BillableRate = @billableRate,
+                TotalHours = @totalHours,
+                TotalCost = @totalCost,
+                BillableAmount = @billableAmount,
+                IsBillable = @isBillable,
+                BillingType = @billingType,
                 UpdatedAt = @updatedAt
             WHERE ResourceID = @resourceId
             AND ProjectID = @projectId
@@ -163,11 +222,50 @@ const updateAllocation = async (req, res) => {
           .input('startDate', sql.Date, startDateObj)
           .input('endDate', sql.Date, endDateObj)
           .input('utilization', sql.Int, utilization)
+          .input('hourlyRate', sql.Decimal(10, 2), resourceHourlyRate)
+          .input('billableRate', sql.Decimal(10, 2), resourceBillableRate)
+          .input('totalHours', sql.Int, allocationTotalHours)
+          .input('totalCost', sql.Decimal(14, 2), totalCost)
+          .input('billableAmount', sql.Decimal(14, 2), billableAmount)
+          .input('isBillable', sql.Bit, allocationIsBillable)
+          .input('billingType', sql.NVarChar(50), billingType || 'Hourly')
           .query(`
-            INSERT INTO Allocations (ResourceID, ProjectID, StartDate, EndDate, Utilization)
-            VALUES (@resourceId, @projectId, @startDate, @endDate, @utilization)
+            INSERT INTO Allocations (
+              ResourceID, 
+              ProjectID, 
+              StartDate, 
+              EndDate, 
+              Utilization,
+              HourlyRate,
+              BillableRate,
+              TotalHours,
+              TotalCost,
+              BillableAmount,
+              IsBillable,
+              BillingType
+            )
+            VALUES (
+              @resourceId, 
+              @projectId, 
+              @startDate, 
+              @endDate, 
+              @utilization,
+              @hourlyRate,
+              @billableRate,
+              @totalHours,
+              @totalCost,
+              @billableAmount,
+              @isBillable,
+              @billingType
+            )
           `);
       }
+      
+      // Recalculate project financial metrics
+      await transaction.request()
+        .input('projectId', sql.Int, projectId)
+        .input('createSnapshot', sql.Bit, 0)
+        .execute('sp_RecalculateProjectFinancials');
       
       // Commit transaction
       await transaction.commit();
@@ -184,7 +282,14 @@ const updateAllocation = async (req, res) => {
             p.Name AS ProjectName,
             a.StartDate,
             a.EndDate,
-            a.Utilization
+            a.Utilization,
+            a.HourlyRate,
+            a.BillableRate,
+            a.TotalHours,
+            a.TotalCost,
+            a.BillableAmount,
+            a.IsBillable,
+            a.BillingType
           FROM Allocations a
           INNER JOIN Resources r ON a.ResourceID = r.ResourceID
           INNER JOIN Projects p ON a.ProjectID = p.ProjectID
@@ -199,7 +304,14 @@ const updateAllocation = async (req, res) => {
         projectName: allocation.ProjectName,
         startDate: allocation.StartDate,
         endDate: allocation.EndDate,
-        utilization: allocation.Utilization
+        utilization: allocation.Utilization,
+        hourlyRate: allocation.HourlyRate,
+        billableRate: allocation.BillableRate,
+        totalHours: allocation.TotalHours,
+        totalCost: allocation.TotalCost,
+        billableAmount: allocation.BillableAmount,
+        isBillable: allocation.IsBillable,
+        billingType: allocation.BillingType
       }));
       
       res.json(allocations);
@@ -231,14 +343,24 @@ const getResourceAllocations = async (req, res) => {
     const resourceCheck = await pool.request()
       .input('resourceId', sql.Int, resourceId)
       .query(`
-        SELECT ResourceID FROM Resources WHERE ResourceID = @resourceId
+        SELECT 
+          ResourceID, 
+          Name, 
+          Role, 
+          HourlyRate, 
+          BillableRate,
+          Currency
+        FROM Resources 
+        WHERE ResourceID = @resourceId
       `);
     
     if (resourceCheck.recordset.length === 0) {
       return res.status(404).json({ message: 'Resource not found' });
     }
     
-    // Get all allocations for this resource
+    const resource = resourceCheck.recordset[0];
+    
+    // Get all allocations for this resource with financial data
     const result = await pool.request()
       .input('resourceId', sql.Int, resourceId)
       .query(`
@@ -250,7 +372,15 @@ const getResourceAllocations = async (req, res) => {
           p.Name AS ProjectName,
           a.StartDate,
           a.EndDate,
-          a.Utilization
+          a.Utilization,
+          a.HourlyRate,
+          a.BillableRate,
+          a.TotalHours,
+          a.TotalCost,
+          a.BillableAmount,
+          a.IsBillable,
+          a.BillingType,
+          p.Currency
         FROM Allocations a
         INNER JOIN Resources r ON a.ResourceID = r.ResourceID
         INNER JOIN Projects p ON a.ProjectID = p.ProjectID
@@ -258,6 +388,39 @@ const getResourceAllocations = async (req, res) => {
         AND a.EndDate >= GETDATE()
         ORDER BY a.StartDate
       `);
+    
+    // Calculate total financial metrics for this resource
+    const financialsResult = await pool.request()
+      .input('resourceId', sql.Int, resourceId)
+      .query(`
+        SELECT 
+          SUM(TotalHours) AS TotalAllocatedHours,
+          SUM(TotalCost) AS TotalCost,
+          SUM(CASE WHEN IsBillable = 1 THEN BillableAmount ELSE 0 END) AS TotalBillableAmount,
+          AVG(CASE WHEN IsBillable = 1 THEN BillableRate ELSE NULL END) AS AvgBillableRate
+        FROM Allocations
+        WHERE ResourceID = @resourceId
+        AND EndDate >= GETDATE()
+      `);
+    
+    const financialSummary = financialsResult.recordset[0];
+    
+    // Get current billable utilization percentage
+    const utilizationResult = await pool.request()
+      .input('resourceId', sql.Int, resourceId)
+      .query(`
+        SELECT 
+          SUM(CASE WHEN IsBillable = 1 THEN Utilization ELSE 0 END) AS BillableUtilization,
+          SUM(Utilization) AS TotalUtilization
+        FROM Allocations
+        WHERE ResourceID = @resourceId
+        AND GETDATE() BETWEEN StartDate AND EndDate
+      `);
+    
+    const utilization = utilizationResult.recordset[0];
+    const billableUtilizationPercentage = utilization.TotalUtilization > 0 
+      ? (utilization.BillableUtilization / utilization.TotalUtilization) * 100 
+      : 0;
     
     const allocations = result.recordset.map(allocation => ({
       id: allocation.AllocationID,
@@ -267,14 +430,43 @@ const getResourceAllocations = async (req, res) => {
       },
       project: {
         id: allocation.ProjectID,
-        name: allocation.ProjectName
+        name: allocation.ProjectName,
+        currency: allocation.Currency
       },
       startDate: allocation.StartDate,
       endDate: allocation.EndDate,
-      utilization: allocation.Utilization
+      utilization: allocation.Utilization,
+      financials: {
+        hourlyRate: allocation.HourlyRate,
+        billableRate: allocation.BillableRate,
+        totalHours: allocation.TotalHours,
+        totalCost: allocation.TotalCost,
+        billableAmount: allocation.BillableAmount,
+        isBillable: allocation.IsBillable,
+        billingType: allocation.BillingType,
+        profit: allocation.BillableAmount - allocation.TotalCost
+      }
     }));
     
-    res.json(allocations);
+    res.json({
+      resource: {
+        id: resource.ResourceID,
+        name: resource.Name,
+        role: resource.Role,
+        hourlyRate: resource.HourlyRate,
+        billableRate: resource.BillableRate,
+        currency: resource.Currency
+      },
+      allocations: allocations,
+      financialSummary: {
+        totalAllocatedHours: financialSummary.TotalAllocatedHours || 0,
+        totalCost: financialSummary.TotalCost || 0,
+        totalBillableAmount: financialSummary.TotalBillableAmount || 0,
+        avgBillableRate: financialSummary.AvgBillableRate || 0,
+        currentBillableUtilization: billableUtilizationPercentage,
+        totalProfit: (financialSummary.TotalBillableAmount || 0) - (financialSummary.TotalCost || 0)
+      }
+    });
   } catch (err) {
     console.error('Error getting resource allocations:', err);
     res.status(500).json({
@@ -436,7 +628,7 @@ const removeAllocation = async (req, res) => {
         return res.status(404).json({ message: 'Resource not found' });
       }
       
-      // Validate allocation exists
+      // Validate allocation exists and get project ID
       const allocationCheck = await transaction.request()
         .input('allocationId', sql.Int, allocationId)
         .input('resourceId', sql.Int, resourceId)
@@ -452,6 +644,8 @@ const removeAllocation = async (req, res) => {
         return res.status(404).json({ message: 'Allocation not found' });
       }
       
+      const projectId = allocationCheck.recordset[0].ProjectID;
+      
       // Delete allocation
       const result = await transaction.request()
         .input('allocationId', sql.Int, allocationId)
@@ -460,10 +654,18 @@ const removeAllocation = async (req, res) => {
           WHERE AllocationID = @allocationId
         `);
       
+      // Recalculate project financial metrics
+      if (projectId) {
+        await transaction.request()
+          .input('projectId', sql.Int, projectId)
+          .input('createSnapshot', sql.Bit, 0)
+          .execute('sp_RecalculateProjectFinancials');
+      }
+      
       // Commit transaction
       await transaction.commit();
       
-      // Fetch remaining allocations for the resource
+      // Fetch remaining allocations for the resource with financial data
       const remainingAllocations = await pool.request()
         .input('resourceId', sql.Int, resourceId)
         .query(`
@@ -475,13 +677,56 @@ const removeAllocation = async (req, res) => {
             p.Name AS ProjectName,
             a.StartDate,
             a.EndDate,
-            a.Utilization
+            a.Utilization,
+            a.HourlyRate,
+            a.BillableRate,
+            a.TotalHours,
+            a.TotalCost,
+            a.BillableAmount,
+            a.IsBillable,
+            a.BillingType
           FROM Allocations a
           INNER JOIN Resources r ON a.ResourceID = r.ResourceID
           INNER JOIN Projects p ON a.ProjectID = p.ProjectID
           WHERE a.ResourceID = @resourceId
           AND a.EndDate >= GETDATE()
         `);
+      
+      // Get updated project data
+      let updatedProjectData = null;
+      if (projectId) {
+        const projectResult = await pool.request()
+          .input('projectId', sql.Int, projectId)
+          .query(`
+            SELECT 
+              p.ProjectID,
+              p.Name,
+              p.Budget,
+              p.ActualCost,
+              p.BudgetUtilization,
+              vf.Variance,
+              vf.BudgetUtilizationPercentage,
+              vf.ProjectProfit
+            FROM Projects p
+            LEFT JOIN vw_ProjectFinancials vf ON p.ProjectID = vf.ProjectID
+            WHERE p.ProjectID = @projectId
+          `);
+        
+        if (projectResult.recordset.length > 0) {
+          updatedProjectData = {
+            id: projectResult.recordset[0].ProjectID,
+            name: projectResult.recordset[0].Name,
+            financials: {
+              budget: projectResult.recordset[0].Budget,
+              actualCost: projectResult.recordset[0].ActualCost,
+              budgetUtilization: projectResult.recordset[0].BudgetUtilization,
+              variance: projectResult.recordset[0].Variance,
+              budgetUtilizationPercentage: projectResult.recordset[0].BudgetUtilizationPercentage,
+              profit: projectResult.recordset[0].ProjectProfit
+            }
+          };
+        }
+      }
       
       const allocations = remainingAllocations.recordset.map(allocation => ({
         id: allocation.AllocationID,
@@ -490,13 +735,44 @@ const removeAllocation = async (req, res) => {
         projectName: allocation.ProjectName,
         startDate: allocation.StartDate,
         endDate: allocation.EndDate,
-        utilization: allocation.Utilization
+        utilization: allocation.Utilization,
+        financials: {
+          hourlyRate: allocation.HourlyRate,
+          billableRate: allocation.BillableRate,
+          totalHours: allocation.TotalHours,
+          totalCost: allocation.TotalCost,
+          billableAmount: allocation.BillableAmount,
+          isBillable: allocation.IsBillable,
+          billingType: allocation.BillingType
+        }
       }));
+      
+      // Calculate updated financial summary for resource
+      const financialsResult = await pool.request()
+        .input('resourceId', sql.Int, resourceId)
+        .query(`
+          SELECT 
+            SUM(TotalHours) AS TotalAllocatedHours,
+            SUM(TotalCost) AS TotalCost,
+            SUM(CASE WHEN IsBillable = 1 THEN BillableAmount ELSE 0 END) AS TotalBillableAmount
+          FROM Allocations
+          WHERE ResourceID = @resourceId
+          AND EndDate >= GETDATE()
+        `);
+      
+      const financialSummary = financialsResult.recordset[0];
       
       res.json({ 
         message: 'Allocation removed successfully',
         deletedCount: result.rowsAffected[0],
-        remainingAllocations: allocations
+        remainingAllocations: allocations,
+        updatedProject: updatedProjectData,
+        financialSummary: {
+          totalAllocatedHours: financialSummary.TotalAllocatedHours || 0,
+          totalCost: financialSummary.TotalCost || 0,
+          totalBillableAmount: financialSummary.TotalBillableAmount || 0,
+          totalProfit: (financialSummary.TotalBillableAmount || 0) - (financialSummary.TotalCost || 0)
+        }
       });
     } catch (err) {
       // Rollback transaction on error

@@ -9,11 +9,14 @@ const resourceRoutes = require('./routes/resourceRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const allocationRoutes = require('./routes/allocationRoutes');
 const roleRoutes = require('./routes/roleRoutes');
+const skillsRoutes = require('./routes/skillsRoutes');  // Added skills routes
 const importRoutes = require('./routes/importRoutes');
 const syncRoutes = require('./routes/syncRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const capacityRoutes = require('./routes/capacityRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const aiRecommendationRoutes = require('./routes/aiRecommendationRoutes');
+const skillRecommendationRoutes = require('./routes/skillRecommendationRoutes');
 const scheduledSyncService = require('./services/scheduledSyncService');
 const settingsController = require('./controllers/settingsController');
 const notificationService = require('./services/notificationService');
@@ -59,11 +62,14 @@ app.use('/api/resources', resourceRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/allocations', allocationRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/api/skills', skillsRoutes);  // Added skills routes
 app.use('/api/import', importRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/capacity', capacityRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/ai', aiRecommendationRoutes);  // AI recommendation routes
+app.use('/api', skillRecommendationRoutes);  // Skill recommendation routes
 
 // Initialize system settings before starting server
 settingsController.initializeSettings();

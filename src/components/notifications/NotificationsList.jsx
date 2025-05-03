@@ -15,8 +15,17 @@ const NotificationsList = () => {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const data = await getNotifications();
-      setNotifications(data);
+      const data = await getNotifications({ limit: 10 });
+      
+      // Convert backend property names to frontend property names if needed
+      const formattedNotifications = Array.isArray(data) ? data.map(notification => ({
+        ...notification,
+        // Convert snake_case to camelCase if needed
+        is_read: notification.isRead || notification.is_read || false,
+        created_at: notification.createdAt || notification.created_at || new Date().toISOString()
+      })) : [];
+      
+      setNotifications(formattedNotifications);
       setError(null);
     } catch (err) {
       setError('Failed to load notifications');

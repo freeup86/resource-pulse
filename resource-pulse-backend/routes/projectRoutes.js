@@ -17,4 +17,7 @@ router.put('/:id', projectController.updateProject);
 // DELETE /api/projects/:id - Delete a project
 router.delete('/:id', projectController.deleteProject);
 
+// POST /api/projects/:id/recalculate-financials - Recalculate project financial data
+router.post('/:id/recalculate-financials', projectController.recalculateFinancials);
+
 module.exports = router;

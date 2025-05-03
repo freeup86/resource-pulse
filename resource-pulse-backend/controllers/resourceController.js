@@ -5,7 +5,7 @@ exports.getAllResources = async (req, res) => {
   try {
     const pool = await poolPromise;
     
-    // Query resources
+    // Query resources with financial info
     const result = await pool.request()
       .query(`
         SELECT 
@@ -13,7 +13,11 @@ exports.getAllResources = async (req, res) => {
           r.Name, 
           r.Role, 
           r.Email, 
-          r.Phone
+          r.Phone,
+          r.HourlyRate,
+          r.BillableRate,
+          r.Currency,
+          r.CostCenter
         FROM Resources r
         ORDER BY r.Name
       `);
@@ -30,7 +34,7 @@ exports.getAllResources = async (req, res) => {
           WHERE rs.ResourceID = @resourceId
         `);
       
-      // Get allocations - Modified to get ALL allocations
+      // Get allocations - Modified to get ALL allocations with financial data
       const allocationsResult = await pool.request()
         .input('resourceId', sql.Int, resource.ResourceID)
         .query(`
@@ -40,7 +44,14 @@ exports.getAllResources = async (req, res) => {
             p.Name AS ProjectName,
             a.StartDate,
             a.EndDate,
-            a.Utilization
+            a.Utilization,
+            a.HourlyRate,
+            a.BillableRate,
+            a.TotalHours,
+            a.TotalCost,
+            a.BillableAmount,
+            a.IsBillable,
+            a.BillingType
           FROM Allocations a
           INNER JOIN Projects p ON a.ProjectID = p.ProjectID
           WHERE a.ResourceID = @resourceId
@@ -55,8 +66,12 @@ exports.getAllResources = async (req, res) => {
         role: resource.Role,
         email: resource.Email,
         phone: resource.Phone,
+        hourlyRate: resource.HourlyRate,
+        billableRate: resource.BillableRate,
+        currency: resource.Currency || 'USD',
+        costCenter: resource.CostCenter,
         skills: skillsResult.recordset.map(skill => skill.Name),
-        // Include ALL allocations as an array
+        // Include ALL allocations as an array with financial data
         allocations: allocationsResult.recordset.map(alloc => ({
           id: alloc.AllocationID,
           projectId: alloc.ProjectID,
@@ -66,7 +81,14 @@ exports.getAllResources = async (req, res) => {
           },
           startDate: alloc.StartDate,
           endDate: alloc.EndDate,
-          utilization: alloc.Utilization
+          utilization: alloc.Utilization,
+          hourlyRate: alloc.HourlyRate || resource.HourlyRate,
+          billableRate: alloc.BillableRate || resource.BillableRate,
+          totalHours: alloc.TotalHours,
+          totalCost: alloc.TotalCost,
+          billableAmount: alloc.BillableAmount,
+          isBillable: alloc.IsBillable !== 0,
+          billingType: alloc.BillingType || 'Hourly'
         }))
       };
       
@@ -81,7 +103,9 @@ exports.getAllResources = async (req, res) => {
           },
           startDate: primaryAlloc.StartDate,
           endDate: primaryAlloc.EndDate,
-          utilization: primaryAlloc.Utilization
+          utilization: primaryAlloc.Utilization,
+          hourlyRate: primaryAlloc.HourlyRate || resource.HourlyRate,
+          billableRate: primaryAlloc.BillableRate || resource.BillableRate
         };
       } else {
         formattedResource.allocation = null;
@@ -106,7 +130,7 @@ exports.getResourceById = async (req, res) => {
     const pool = await poolPromise;
     const { id } = req.params;
     
-    // Query resource
+    // Query resource with financial info
     const result = await pool.request()
       .input('resourceId', sql.Int, id)
       .query(`
@@ -115,7 +139,11 @@ exports.getResourceById = async (req, res) => {
           r.Name, 
           r.Role, 
           r.Email, 
-          r.Phone
+          r.Phone,
+          r.HourlyRate,
+          r.BillableRate,
+          r.Currency,
+          r.CostCenter
         FROM Resources r
         WHERE r.ResourceID = @resourceId
       `);
@@ -136,7 +164,7 @@ exports.getResourceById = async (req, res) => {
         WHERE rs.ResourceID = @resourceId
       `);
     
-    // Get allocations - Modified to get ALL allocations
+    // Get allocations with financial data
     const allocationsResult = await pool.request()
       .input('resourceId', sql.Int, resource.ResourceID)
       .query(`
@@ -146,13 +174,44 @@ exports.getResourceById = async (req, res) => {
           p.Name AS ProjectName,
           a.StartDate,
           a.EndDate,
-          a.Utilization
+          a.Utilization,
+          a.HourlyRate,
+          a.BillableRate,
+          a.TotalHours,
+          a.TotalCost,
+          a.BillableAmount,
+          a.IsBillable,
+          a.BillingType
         FROM Allocations a
         INNER JOIN Projects p ON a.ProjectID = p.ProjectID
         WHERE a.ResourceID = @resourceId
         AND a.EndDate >= GETDATE()
         ORDER BY a.EndDate ASC
       `);
+    
+    // Try to get time entries if the table exists
+    let timeEntriesResult = { recordset: [] };
+    try {
+      timeEntriesResult = await pool.request()
+        .input('resourceId', sql.Int, resource.ResourceID)
+        .query(`
+          SELECT 
+            t.EntryID AS TimeEntryID,
+            t.ProjectID,
+            p.Name AS ProjectName,
+            t.EntryDate,
+            t.Hours,
+            t.Description,
+            t.IsBillable,
+            'Approved' AS Status
+          FROM TimeEntries t
+          INNER JOIN Projects p ON t.ProjectID = p.ProjectID
+          WHERE t.ResourceID = @resourceId
+          ORDER BY t.EntryDate DESC
+        `);
+    } catch (err) {
+      console.log('Time entries table not available or error:', err.message);
+    }
     
     // Format the response
     const formattedResource = {
@@ -161,8 +220,12 @@ exports.getResourceById = async (req, res) => {
       role: resource.Role,
       email: resource.Email,
       phone: resource.Phone,
+      hourlyRate: resource.HourlyRate,
+      billableRate: resource.BillableRate,
+      currency: resource.Currency || 'USD',
+      costCenter: resource.CostCenter,
       skills: skillsResult.recordset.map(skill => skill.Name),
-      // Include ALL allocations as an array
+      // Include ALL allocations as an array with financial data
       allocations: allocationsResult.recordset.map(alloc => ({
         id: alloc.AllocationID,
         projectId: alloc.ProjectID,
@@ -172,7 +235,25 @@ exports.getResourceById = async (req, res) => {
         },
         startDate: alloc.StartDate,
         endDate: alloc.EndDate,
-        utilization: alloc.Utilization
+        utilization: alloc.Utilization,
+        hourlyRate: alloc.HourlyRate || resource.HourlyRate,
+        billableRate: alloc.BillableRate || resource.BillableRate,
+        totalHours: alloc.TotalHours,
+        totalCost: alloc.TotalCost,
+        billableAmount: alloc.BillableAmount,
+        isBillable: alloc.IsBillable !== 0,
+        billingType: alloc.BillingType || 'Hourly'
+      })),
+      // Add time entries
+      timeEntries: timeEntriesResult.recordset.map(entry => ({
+        id: entry.TimeEntryID,
+        projectId: entry.ProjectID,
+        projectName: entry.ProjectName,
+        date: entry.EntryDate,
+        hours: entry.Hours,
+        description: entry.Description,
+        isBillable: entry.IsBillable !== 0,
+        status: entry.Status
       }))
     };
     
@@ -187,10 +268,40 @@ exports.getResourceById = async (req, res) => {
         },
         startDate: primaryAlloc.StartDate,
         endDate: primaryAlloc.EndDate,
-        utilization: primaryAlloc.Utilization
+        utilization: primaryAlloc.Utilization,
+        hourlyRate: primaryAlloc.HourlyRate || resource.HourlyRate,
+        billableRate: primaryAlloc.BillableRate || resource.BillableRate
       };
     } else {
       formattedResource.allocation = null;
+    }
+    
+    // Add financial summary
+    const financialSummaryResult = await pool.request()
+      .input('resourceId', sql.Int, resource.ResourceID)
+      .query(`
+        SELECT 
+          SUM(a.TotalHours) AS TotalAllocatedHours,
+          SUM(a.TotalCost) AS TotalCost,
+          SUM(CASE WHEN a.IsBillable = 1 THEN a.BillableAmount ELSE 0 END) AS TotalBillableAmount,
+          SUM(CASE WHEN a.IsBillable = 1 THEN a.BillableAmount ELSE 0 END) - SUM(a.TotalCost) AS TotalProfit,
+          CASE 
+            WHEN SUM(CASE WHEN a.IsBillable = 1 THEN a.BillableAmount ELSE 0 END) > 0 
+            THEN (SUM(CASE WHEN a.IsBillable = 1 THEN a.BillableAmount ELSE 0 END) - SUM(a.TotalCost)) / SUM(CASE WHEN a.IsBillable = 1 THEN a.BillableAmount ELSE 0 END) * 100
+            ELSE 0
+          END AS ProfitMargin
+        FROM Allocations a
+        WHERE a.ResourceID = @resourceId
+      `);
+    
+    if (financialSummaryResult.recordset.length > 0) {
+      formattedResource.financialSummary = {
+        totalAllocatedHours: financialSummaryResult.recordset[0].TotalAllocatedHours || 0,
+        totalCost: financialSummaryResult.recordset[0].TotalCost || 0,
+        totalBillableAmount: financialSummaryResult.recordset[0].TotalBillableAmount || 0,
+        totalProfit: financialSummaryResult.recordset[0].TotalProfit || 0,
+        profitMargin: financialSummaryResult.recordset[0].ProfitMargin || 0
+      };
     }
     
     res.json(formattedResource);
@@ -208,7 +319,17 @@ exports.getResourceById = async (req, res) => {
 exports.createResource = async (req, res) => {
   try {
     const pool = await poolPromise;
-    const { name, roleId, email, phone, skills } = req.body;
+    const { 
+      name, 
+      roleId, 
+      email, 
+      phone, 
+      skills, 
+      hourlyRate, 
+      billableRate, 
+      currency, 
+      costCenter 
+    } = req.body;
     
     // Validate required fields
     if (!name || !roleId) {
@@ -220,16 +341,20 @@ exports.createResource = async (req, res) => {
     await transaction.begin();
     
     try {
-      // Insert resource
+      // Insert resource with financial data
       const resourceResult = await transaction.request()
         .input('name', sql.NVarChar, name)
         .input('roleId', sql.Int, roleId)
         .input('email', sql.NVarChar, email || null)
         .input('phone', sql.NVarChar, phone || null)
+        .input('hourlyRate', sql.Decimal(10, 2), hourlyRate || null)
+        .input('billableRate', sql.Decimal(10, 2), billableRate || null)
+        .input('currency', sql.NVarChar, currency || 'USD')
+        .input('costCenter', sql.NVarChar, costCenter || null)
         .query(`
-          INSERT INTO Resources (Name, RoleID, Email, Phone)
+          INSERT INTO Resources (Name, RoleID, Email, Phone, HourlyRate, BillableRate, Currency, CostCenter)
           OUTPUT INSERTED.ResourceID
-          VALUES (@name, @roleId, @email, @phone)
+          VALUES (@name, @roleId, @email, @phone, @hourlyRate, @billableRate, @currency, @costCenter)
         `);
       
       const resourceId = resourceResult.recordset[0].ResourceID;
@@ -297,7 +422,7 @@ exports.createResource = async (req, res) => {
       // Commit transaction
       await transaction.commit();
       
-      // Return the created resource with the role info
+      // Return the created resource with the role info and financial data
       const result = await pool.request()
         .input('resourceId', sql.Int, resourceId)
         .query(`
@@ -308,7 +433,11 @@ exports.createResource = async (req, res) => {
             r.RoleID,
             ro.Name as RoleName,
             r.Email, 
-            r.Phone
+            r.Phone,
+            r.HourlyRate,
+            r.BillableRate,
+            r.Currency,
+            r.CostCenter
           FROM Resources r
           LEFT JOIN Roles ro ON r.RoleID = ro.RoleID
           WHERE r.ResourceID = @resourceId
@@ -334,6 +463,10 @@ exports.createResource = async (req, res) => {
         roleName: resource.RoleName,
         email: resource.Email,
         phone: resource.Phone,
+        hourlyRate: resource.HourlyRate,
+        billableRate: resource.BillableRate,
+        currency: resource.Currency,
+        costCenter: resource.CostCenter,
         skills: skillsResult.recordset.map(skill => skill.Name),
         allocation: null
       };
@@ -358,7 +491,17 @@ exports.updateResource = async (req, res) => {
   try {
     const pool = await poolPromise;
     const { id } = req.params;
-    const { name, roleId, email, phone, skills } = req.body;
+    const { 
+      name, 
+      roleId, 
+      email, 
+      phone, 
+      skills, 
+      hourlyRate, 
+      billableRate, 
+      currency, 
+      costCenter 
+    } = req.body;
     
     // Validate required fields
     if (!name || !roleId) {
@@ -393,7 +536,7 @@ exports.updateResource = async (req, res) => {
       
       const roleName = roleResult.recordset[0]?.Name || '';
       
-      // Update resource with roleId and role text for compatibility
+      // Update resource with roleId, role text, and financial data
       await transaction.request()
         .input('resourceId', sql.Int, id)
         .input('name', sql.NVarChar, name)
@@ -401,6 +544,10 @@ exports.updateResource = async (req, res) => {
         .input('roleName', sql.NVarChar, roleName)
         .input('email', sql.NVarChar, email || null)
         .input('phone', sql.NVarChar, phone || null)
+        .input('hourlyRate', sql.Decimal(10, 2), hourlyRate || null)
+        .input('billableRate', sql.Decimal(10, 2), billableRate || null)
+        .input('currency', sql.NVarChar, currency || 'USD')
+        .input('costCenter', sql.NVarChar, costCenter || null)
         .input('updatedAt', sql.DateTime2, new Date())
         .query(`
           UPDATE Resources
@@ -409,6 +556,10 @@ exports.updateResource = async (req, res) => {
               Role = @roleName,
               Email = @email,
               Phone = @phone,
+              HourlyRate = @hourlyRate,
+              BillableRate = @billableRate,
+              Currency = @currency,
+              CostCenter = @costCenter,
               UpdatedAt = @updatedAt
           WHERE ResourceID = @resourceId
         `);
@@ -462,6 +613,25 @@ exports.updateResource = async (req, res) => {
         }
       }
       
+      // Update allocations with new resource rates if applicable
+      if (hourlyRate !== undefined || billableRate !== undefined) {
+        await transaction.request()
+          .input('resourceId', sql.Int, id)
+          .input('hourlyRate', sql.Decimal(10, 2), hourlyRate || null)
+          .input('billableRate', sql.Decimal(10, 2), billableRate || null)
+          .query(`
+            UPDATE Allocations
+            SET 
+              HourlyRate = COALESCE(HourlyRate, @hourlyRate),
+              BillableRate = COALESCE(BillableRate, @billableRate),
+              TotalCost = COALESCE(TotalHours, 0) * COALESCE(HourlyRate, @hourlyRate),
+              BillableAmount = CASE WHEN IsBillable = 1 THEN COALESCE(TotalHours, 0) * COALESCE(BillableRate, @billableRate) ELSE 0 END
+            WHERE 
+              ResourceID = @resourceId
+              AND (HourlyRate IS NULL OR BillableRate IS NULL)
+          `);
+      }
+      
       // Commit transaction
       await transaction.commit();
       
@@ -476,7 +646,11 @@ exports.updateResource = async (req, res) => {
             r.RoleID,
             ro.Name as RoleName,
             r.Email, 
-            r.Phone
+            r.Phone,
+            r.HourlyRate,
+            r.BillableRate,
+            r.Currency,
+            r.CostCenter
           FROM Resources r
           LEFT JOIN Roles ro ON r.RoleID = ro.RoleID
           WHERE r.ResourceID = @resourceId
@@ -502,7 +676,14 @@ exports.updateResource = async (req, res) => {
             p.Name AS ProjectName,
             a.StartDate,
             a.EndDate,
-            a.Utilization
+            a.Utilization,
+            a.HourlyRate,
+            a.BillableRate,
+            a.TotalHours,
+            a.TotalCost,
+            a.BillableAmount,
+            a.IsBillable,
+            a.BillingType
           FROM Allocations a
           INNER JOIN Projects p ON a.ProjectID = p.ProjectID
           WHERE a.ResourceID = @resourceId
@@ -520,13 +701,19 @@ exports.updateResource = async (req, res) => {
         roleName: resource.RoleName,
         email: resource.Email,
         phone: resource.Phone,
+        hourlyRate: resource.HourlyRate,
+        billableRate: resource.BillableRate,
+        currency: resource.Currency,
+        costCenter: resource.CostCenter,
         skills: skillsResult.recordset.map(skill => skill.Name),
         allocation: allocationResult.recordset.length > 0 ? {
           projectId: allocationResult.recordset[0].ProjectID,
           projectName: allocationResult.recordset[0].ProjectName,
           startDate: allocationResult.recordset[0].StartDate,
           endDate: allocationResult.recordset[0].EndDate,
-          utilization: allocationResult.recordset[0].Utilization
+          utilization: allocationResult.recordset[0].Utilization,
+          hourlyRate: allocationResult.recordset[0].HourlyRate,
+          billableRate: allocationResult.recordset[0].BillableRate
         } : null,
         allocations: allocationResult.recordset.map(alloc => ({
           id: alloc.AllocationID,
@@ -534,7 +721,14 @@ exports.updateResource = async (req, res) => {
           projectName: alloc.ProjectName,
           startDate: alloc.StartDate,
           endDate: alloc.EndDate,
-          utilization: alloc.Utilization
+          utilization: alloc.Utilization,
+          hourlyRate: alloc.HourlyRate,
+          billableRate: alloc.BillableRate,
+          totalHours: alloc.TotalHours,
+          totalCost: alloc.TotalCost,
+          billableAmount: alloc.BillableAmount,
+          isBillable: alloc.IsBillable !== 0,
+          billingType: alloc.BillingType || 'Hourly'
         }))
       };
       

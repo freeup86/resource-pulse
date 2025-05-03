@@ -1,20 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import NotificationsList from './NotificationsList';
-import { getUnreadCount } from '../../services/notificationService';
+import { getUnreadCount, setCurrentUserId } from '../../services/notificationService';
+import { useUser } from '../../contexts/UserContext';
 
 const NotificationCenter = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [error, setError] = useState(false);
   const dropdownRef = useRef(null);
+  const { currentUser } = useUser();
+  
+  useEffect(() => {
+    // Update the current user ID in the notification service
+    if (currentUser && currentUser.id) {
+      setCurrentUserId(currentUser.id);
+    }
+  }, [currentUser]);
   
   useEffect(() => {
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 60000); // Check every minute
     
     return () => clearInterval(interval);
-  }, []);
+  }, [currentUser]);
   
   useEffect(() => {
     const handleClickOutside = (event) => {

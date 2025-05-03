@@ -1,6 +1,19 @@
 // src/services/notificationService.js
 import api from './api';
 
+// Import global state for current user ID
+let currentUserId = 1; // Default to user ID 1
+
+// Function to update the current user ID - will be called from components
+export const setCurrentUserId = (userId) => {
+  if (userId && userId > 0) {
+    currentUserId = userId;
+  }
+};
+
+// Function to get the current user ID
+export const getCurrentUserId = () => currentUserId;
+
 /**
  * Get all notifications
  * @param {Object} params - Query parameters
@@ -8,10 +21,9 @@ import api from './api';
  */
 export const getNotifications = async (params = {}) => {
   try {
-    // For now, we'll assume the current user - in a real app, this would come from auth context
-    const userId = 1;
+    const userId = getCurrentUserId();
     const response = await api.get(`/notifications/users/${userId}/notifications`, { params });
-    return response.data;
+    return response.data.notifications || [];
   } catch (error) {
     console.error('Error fetching notifications:', error);
     // Return empty array if notification system isn't set up yet
@@ -43,8 +55,28 @@ export const getUserNotifications = async (userId, params = {}) => {
  */
 export const getNotificationById = async (id) => {
   try {
-    const response = await api.get(`/notifications/notifications/${id}`);
-    return response.data;
+    // This endpoint doesn't exist in the backend yet
+    // For now, we'll handle this client-side by getting all notifications and filtering
+    const userId = getCurrentUserId();
+    const response = await api.get(`/notifications/users/${userId}/notifications`);
+    const notifications = response.data.notifications || [];
+    const notification = notifications.find(n => n.id === parseInt(id));
+    
+    if (notification) {
+      return notification;
+    }
+    
+    // Return default notification if not found
+    return {
+      id: id,
+      title: 'Notification',
+      message: 'Notification details not available',
+      isRead: true,
+      createdAt: new Date().toISOString(),
+      type: 'system',
+      relatedEntityType: null,
+      relatedEntityId: null
+    };
   } catch (error) {
     console.error('Error fetching notification details:', error);
     // Return default notification if system isn't set up yet
@@ -52,24 +84,25 @@ export const getNotificationById = async (id) => {
       id: id,
       title: 'Notification',
       message: 'Notification details not available',
-      is_read: true,
-      created_at: new Date().toISOString(),
+      isRead: true,
+      createdAt: new Date().toISOString(),
       type: 'system',
-      details: null,
-      link: null
+      relatedEntityType: null,
+      relatedEntityId: null
     };
   }
 };
 
 /**
  * Get unread notification count for a user
- * @param {number} userId - User ID
- * @returns {Promise<Object>} - Unread count
+ * @param {number} [userId] - Optional user ID (defaults to current user)
+ * @returns {Promise<number>} - Unread count
  */
-export const getUnreadCount = async (userId = 1) => {
+export const getUnreadCount = async (userId) => {
   try {
-    const response = await api.get(`/notifications/users/${userId}/notifications/unread`);
-    return response.data;
+    const id = userId || getCurrentUserId();
+    const response = await api.get(`/notifications/users/${id}/notifications/unread`);
+    return response.data.count || 0;
   } catch (error) {
     console.error('Error fetching unread count:', error);
     // Return 0 instead of throwing to prevent app crashes if the notification system isn't set up yet
@@ -89,7 +122,7 @@ export const markNotificationAsRead = async (notificationId) => {
   } catch (error) {
     console.error('Error marking notification as read:', error);
     // Return success response even if API fails
-    return { success: true };
+    return { message: 'Notification marked as read' };
   }
 };
 
@@ -98,17 +131,21 @@ export const markAsRead = markNotificationAsRead;
 
 /**
  * Mark all notifications as read for a user
- * @param {number} userId - User ID
+ * @param {number} [userId] - Optional user ID (defaults to current user)
  * @returns {Promise<Object>} - Response
  */
-export const markAllNotificationsAsRead = async (userId = 1) => {
+export const markAllNotificationsAsRead = async (userId) => {
   try {
-    const response = await api.put(`/notifications/users/${userId}/notifications/read`);
+    const id = userId || getCurrentUserId();
+    const response = await api.put(`/notifications/users/${id}/notifications/read`);
     return response.data;
   } catch (error) {
     console.error('Error marking all notifications as read:', error);
     // Return success response even if API fails
-    return { success: true };
+    return { 
+      message: 'All notifications marked as read',
+      count: 0
+    };
   }
 };
 
@@ -133,51 +170,75 @@ export const deleteNotification = async (notificationId) => {
 
 /**
  * Get notification settings for a user
- * @param {number} userId - User ID
+ * @param {number} [userId] - Optional user ID (defaults to current user)
  * @returns {Promise<Array>} - User notification settings
  */
-export const getUserNotificationSettings = async (userId = 1) => {
+export const getUserNotificationSettings = async (userId) => {
   try {
-    const response = await api.get(`/notifications/users/${userId}/settings`);
+    const id = userId || getCurrentUserId();
+    const response = await api.get(`/notifications/users/${id}/settings`);
     return response.data;
   } catch (error) {
     console.error('Error fetching notification settings:', error);
     // Return default settings if not set up yet
     return [
       {
-        notification_type_id: 1,
-        type_name: 'Allocation Change',
-        description: 'Notify when resource allocations change',
-        in_app: true,
-        email: false
+        typeId: 1,
+        type: 'allocation_created',
+        description: 'Notify when resource allocations are created',
+        isInAppEnabled: true,
+        isEmailEnabled: false,
+        frequency: 'immediate'
       },
       {
-        notification_type_id: 2,
-        type_name: 'Deadline Approaching',
+        typeId: 2,
+        type: 'allocation_updated',
+        description: 'Notify when resource allocations are updated',
+        isInAppEnabled: true,
+        isEmailEnabled: false,
+        frequency: 'immediate'
+      },
+      {
+        typeId: 3,
+        type: 'allocation_deleted',
+        description: 'Notify when resource allocations are deleted',
+        isInAppEnabled: true,
+        isEmailEnabled: false,
+        frequency: 'immediate'
+      },
+      {
+        typeId: 4,
+        type: 'deadline_approaching',
         description: 'Notify when allocation deadlines are approaching',
-        in_app: true,
-        email: false
+        isInAppEnabled: true,
+        isEmailEnabled: false,
+        frequency: 'immediate',
+        thresholdDays: 7
       },
       {
-        notification_type_id: 3,
-        type_name: 'Resource Conflict',
+        typeId: 5,
+        type: 'resource_conflict',
         description: 'Notify when resources are overallocated',
-        in_app: true,
-        email: false
+        isInAppEnabled: true,
+        isEmailEnabled: false,
+        frequency: 'immediate'
       },
       {
-        notification_type_id: 4,
-        type_name: 'Capacity Threshold',
+        typeId: 6,
+        type: 'capacity_threshold',
         description: 'Notify when capacity thresholds are exceeded',
-        in_app: true,
-        email: false
+        isInAppEnabled: true,
+        isEmailEnabled: false,
+        frequency: 'immediate',
+        thresholdPercent: 90
       },
       {
-        notification_type_id: 5,
-        type_name: 'Weekly Digest',
+        typeId: 7,
+        type: 'weekly_digest',
         description: 'Weekly summary of resource allocations',
-        in_app: true,
-        email: true
+        isInAppEnabled: true,
+        isEmailEnabled: true,
+        frequency: 'weekly'
       }
     ];
   }
@@ -188,23 +249,24 @@ export const getUserSettings = getUserNotificationSettings;
 
 /**
  * Update notification settings for a user
- * @param {number} userId - User ID
  * @param {Object} settings - Settings to update
+ * @param {number} [userId] - Optional user ID (defaults to current user)
  * @returns {Promise<Object>} - Response
  */
-export const updateUserNotificationSettings = async (settings, userId = 1) => {
+export const updateUserNotificationSettings = async (settings, userId) => {
   try {
-    const response = await api.put(`/notifications/users/${userId}/settings`, settings);
+    const id = userId || getCurrentUserId();
+    const response = await api.put(`/notifications/users/${id}/settings`, settings);
     return response.data;
   } catch (error) {
     console.error('Error updating notification settings:', error);
     // Return success response even if API fails
-    return { success: true, settings };
+    return { message: 'Notification settings updated successfully', settings };
   }
 };
 
 // Keep original as alias
-export const updateUserSettings = async (userId, settings) => {
+export const updateUserSettings = async (settings, userId) => {
   return updateUserNotificationSettings(settings, userId);
 };
 

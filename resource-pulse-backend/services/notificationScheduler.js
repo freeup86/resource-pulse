@@ -10,48 +10,86 @@ const initializeScheduledJobs = async () => {
   try {
     console.log('Initializing notification scheduler...');
 
+    // Initialize the notification service first
+    const serviceInitialized = await notificationService.initializeService();
+    if (!serviceInitialized) {
+      console.warn('Notification service initialization failed, but continuing with scheduler setup');
+    } else {
+      console.log('Notification service initialized, continuing with scheduler setup');
+    }
+
     // Schedule email processing every 5 minutes
-    cron.schedule('*/5 * * * *', async () => {
-      try {
-        console.log('Running scheduled email processing job');
-        await notificationService.processEmailQueue(20);
-      } catch (error) {
-        console.error('Error processing email queue:', error);
-      }
-    });
+    try {
+      cron.schedule('*/5 * * * *', async () => {
+        try {
+          console.log('Running scheduled email processing job');
+          await notificationService.processEmailQueue(20);
+        } catch (error) {
+          console.error('Error processing email queue:', error);
+        }
+      });
+      console.log('Email processing job scheduled: */5 * * * *');
+    } catch (emailScheduleError) {
+      console.error('Failed to schedule email processing job:', emailScheduleError);
+    }
 
     // Schedule daily check for approaching deadlines
-    cron.schedule('0 8 * * *', async () => {
-      try {
-        console.log('Running deadline notification check');
-        await checkDeadlines();
-      } catch (error) {
-        console.error('Error checking deadlines:', error);
-      }
-    });
+    try {
+      cron.schedule('0 8 * * *', async () => {
+        try {
+          console.log('Running deadline notification check');
+          await checkDeadlines();
+        } catch (error) {
+          console.error('Error checking deadlines:', error);
+        }
+      });
+      console.log('Deadline check job scheduled: 0 8 * * *');
+    } catch (deadlineScheduleError) {
+      console.error('Failed to schedule deadline check job:', deadlineScheduleError);
+    }
 
     // Schedule daily check for capacity thresholds
-    cron.schedule('0 9 * * *', async () => {
-      try {
-        console.log('Running capacity threshold check');
-        await checkCapacityThresholds();
-      } catch (error) {
-        console.error('Error checking capacity thresholds:', error);
-      }
-    });
+    try {
+      cron.schedule('0 9 * * *', async () => {
+        try {
+          console.log('Running capacity threshold check');
+          await checkCapacityThresholds();
+        } catch (error) {
+          console.error('Error checking capacity thresholds:', error);
+        }
+      });
+      console.log('Capacity threshold check job scheduled: 0 9 * * *');
+    } catch (capacityScheduleError) {
+      console.error('Failed to schedule capacity threshold check job:', capacityScheduleError);
+    }
 
     // Schedule daily check for resource conflicts
-    cron.schedule('0 10 * * *', async () => {
+    try {
+      cron.schedule('0 10 * * *', async () => {
+        try {
+          console.log('Running resource conflict check');
+          await checkResourceConflicts();
+        } catch (error) {
+          console.error('Error checking resource conflicts:', error);
+        }
+      });
+      console.log('Resource conflict check job scheduled: 0 10 * * *');
+    } catch (conflictScheduleError) {
+      console.error('Failed to schedule resource conflict check job:', conflictScheduleError);
+    }
+
+    // Schedule immediate run of the email processing job
+    setTimeout(async () => {
       try {
-        console.log('Running resource conflict check');
-        await checkResourceConflicts();
+        console.log('Running initial email processing job');
+        await notificationService.processEmailQueue(20);
       } catch (error) {
-        console.error('Error checking resource conflicts:', error);
+        console.error('Error processing email queue on initialization:', error);
       }
-    });
+    }, 10000); // Wait 10 seconds after initialization
 
     // Schedule weekly digest based on system settings
-    initializeWeeklyDigest();
+    await initializeWeeklyDigest();
 
     console.log('Notification scheduler initialized successfully');
     return true;
@@ -68,20 +106,34 @@ const initializeWeeklyDigest = async () => {
   try {
     const pool = await poolPromise;
     
-    // Get digest schedule settings from system settings
-    const settingsResult = await pool.request()
-      .query(`
-        SELECT SettingValue
-        FROM SystemNotificationSettings
-        WHERE SettingKey IN ('digest_day', 'digest_time')
-      `);
+    // Verify DigestSchedules table exists
+    try {
+      await pool.request().query(`SELECT TOP 1 * FROM DigestSchedules`);
+    } catch (tableError) {
+      console.error('DigestSchedules table does not exist:', tableError.message);
+      return;
+    }
     
-    // Default values
-    let dayOfWeek = 1; // Monday
-    let timeOfDay = '08:00';
-    
-    // Get values from settings
-    if (settingsResult.recordset.length > 0) {
+    // Verify SystemNotificationSettings table exists and has required settings
+    try {
+      // Get digest schedule settings from system settings
+      const settingsResult = await pool.request()
+        .query(`
+          SELECT SettingKey, SettingValue
+          FROM SystemNotificationSettings
+          WHERE SettingKey IN ('digest_day', 'digest_time')
+        `);
+      
+      // Default values
+      let dayOfWeek = 1; // Monday
+      let timeOfDay = '08:00';
+      
+      // Check if we got any settings
+      if (settingsResult.recordset.length < 2) {
+        console.warn('Missing digest schedule settings, using defaults');
+      }
+      
+      // Get values from settings
       settingsResult.recordset.forEach(setting => {
         if (setting.SettingKey === 'digest_day') {
           dayOfWeek = parseInt(setting.SettingValue);
@@ -89,21 +141,70 @@ const initializeWeeklyDigest = async () => {
           timeOfDay = setting.SettingValue.substring(0, 5);
         }
       });
-    }
-    
-    // Schedule weekly digest
-    const cronExpression = `${timeOfDay.split(':')[1]} ${timeOfDay.split(':')[0]} * * ${dayOfWeek}`;
-    
-    cron.schedule(cronExpression, async () => {
-      try {
-        console.log('Running weekly digest job');
-        await sendWeeklyDigests();
-      } catch (error) {
-        console.error('Error sending weekly digests:', error);
+      
+      // Validate day of week and time
+      if (isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+        console.warn(`Invalid digest_day value: ${dayOfWeek}, using default (1)`);
+        dayOfWeek = 1;
       }
-    });
-    
-    console.log(`Weekly digest scheduled for day ${dayOfWeek} at ${timeOfDay}`);
+      
+      if (!timeOfDay.match(/^\d{2}:\d{2}$/)) {
+        console.warn(`Invalid digest_time format: ${timeOfDay}, using default (08:00)`);
+        timeOfDay = '08:00';
+      }
+      
+      // Schedule weekly digest
+      const cronExpression = `${timeOfDay.split(':')[1]} ${timeOfDay.split(':')[0]} * * ${dayOfWeek}`;
+      
+      try {
+        cron.schedule(cronExpression, async () => {
+          try {
+            console.log('Running weekly digest job');
+            await sendWeeklyDigests();
+          } catch (error) {
+            console.error('Error sending weekly digests:', error);
+          }
+        });
+        
+        console.log(`Weekly digest scheduled for day ${dayOfWeek} at ${timeOfDay} (cron: ${cronExpression})`);
+      } catch (cronError) {
+        console.error('Error scheduling digest job:', cronError);
+      }
+      
+      // Also update the DigestSchedules table with the next run time
+      try {
+        const now = new Date();
+        let nextRunDate = new Date();
+        
+        // Calculate days until next occurrence
+        const currentDay = now.getDay(); // 0-6, Sunday to Saturday
+        const daysUntilNext = (dayOfWeek - currentDay + 7) % 7;
+        nextRunDate.setDate(now.getDate() + (daysUntilNext === 0 ? 7 : daysUntilNext));
+        
+        // Set the time
+        const [hours, minutes] = timeOfDay.split(':').map(Number);
+        nextRunDate.setHours(hours, minutes, 0, 0);
+        
+        // If the next run time is in the past (today but earlier), add 7 days
+        if (nextRunDate <= now) {
+          nextRunDate.setDate(nextRunDate.getDate() + 7);
+        }
+        
+        await pool.request()
+          .input('nextRunAt', sql.DateTime2, nextRunDate)
+          .query(`
+            UPDATE DigestSchedules
+            SET NextRunAt = @nextRunAt
+            WHERE Frequency = 'weekly' AND IsActive = 1
+          `);
+        
+        console.log(`Updated digest schedule with next run time: ${nextRunDate.toISOString()}`);
+      } catch (updateError) {
+        console.error('Error updating digest schedule:', updateError);
+      }
+    } catch (settingsError) {
+      console.error('Error getting digest settings:', settingsError);
+    }
   } catch (error) {
     console.error('Error initializing weekly digest:', error);
   }

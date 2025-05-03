@@ -18,6 +18,26 @@ const adjustToLocalStartOfDay = (dateInput) => {
   return addDays(adjustedDate, 1);
 };
 
+// Format a currency value with the specified currency code
+export const formatCurrency = (value, currencyCode = 'USD') => {
+  if (value === null || value === undefined) {
+    return 'N/A';
+  }
+  
+  try {
+    // Format using Intl.NumberFormat for localized currency formatting
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  } catch (error) {
+    console.error('Error formatting currency:', error);
+    return `${value.toFixed(2)} ${currencyCode}`;
+  }
+};
+
 // Format a date to display format
 export const formatDate = (dateStr) => {
   if (!dateStr) return 'N/A';

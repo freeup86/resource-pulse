@@ -13,7 +13,9 @@ const { poolPromise, sql } = require('./config');
 const SCRIPTS_TO_EXECUTE = [
   { name: 'setup.sql', description: 'Core tables (Resources, Projects, Skills, Allocations)' },
   { name: 'capacity-tables.sql', description: 'Capacity planning tables' },
-  { name: 'notification-tables.sql', description: 'Notification system tables' }
+  { name: 'notification-tables.sql', description: 'Notification system tables' },
+  { name: 'financial-tracking.sql', description: 'Financial tracking tables and views' },
+  { name: 'financial-calculations.sql', description: 'Financial calculations stored procedures' }
 ];
 
 // Add any additional scripts or data seed scripts here if needed
@@ -66,6 +68,28 @@ const setupDatabaseFromScratch = async () => {
           
           if (checkTable.recordset[0].TableExists === 1) {
             console.log(`  Notification tables already exist, skipping ${script.name}`);
+            continue;
+          }
+        } else if (script.name === 'financial-tracking.sql') {
+          const checkTable = await pool.request().query(`
+            SELECT CASE WHEN EXISTS (
+              SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ProjectFinancialSnapshots'
+            ) THEN 1 ELSE 0 END AS TableExists
+          `);
+          
+          if (checkTable.recordset[0].TableExists === 1) {
+            console.log(`  Financial tracking tables already exist, skipping ${script.name}`);
+            continue;
+          }
+        } else if (script.name === 'financial-calculations.sql') {
+          const checkProc = await pool.request().query(`
+            SELECT CASE WHEN EXISTS (
+              SELECT * FROM sys.procedures WHERE name = 'sp_RecalculateProjectFinancials'
+            ) THEN 1 ELSE 0 END AS ProcedureExists
+          `);
+          
+          if (checkProc.recordset[0].ProcedureExists === 1) {
+            console.log(`  Financial calculations procedures already exist, skipping ${script.name}`);
             continue;
           }
         }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Briefcase, Calendar, FileSearch } from 'lucide-react';
+import { Users, Briefcase, Calendar, FileSearch, DollarSign } from 'lucide-react';
 import { useResources } from '../contexts/ResourceContext';
 import { useProjects } from '../contexts/ProjectContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -9,6 +9,7 @@ import UtilizationChart from './dashboard/UtilizationChart';
 import SkillsAnalysis from './dashboard/SkillsAnalysis';
 import AvailabilityForecast from './dashboard/AvailabilityForecast';
 import MiniTimeline from './dashboard/MiniTimeline';
+import FinancialSummary from './dashboard/FinancialSummary';
 
 const Dashboard = () => {
   const { resources, loading: resourcesLoading, error: resourcesError } = useResources();
@@ -86,6 +87,11 @@ const Dashboard = () => {
       </div>
       
       {/* Analytics */}
+      {/* Financial Summary Section */}
+      <div className="mb-6">
+        <FinancialSummary />
+      </div>
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <UtilizationChart />
         {/*<SkillsAnalysis />*/}
@@ -129,12 +135,12 @@ const Dashboard = () => {
           </div>
         </Link>
         
-        <Link to="/matches" className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
+        <Link to="/financial-reports" className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
           <div className="flex items-center">
-            <FileSearch className="h-8 w-8 text-purple-500" />
+            <DollarSign className="h-8 w-8 text-emerald-500" />
             <div className="ml-4">
-              <h3 className="font-medium">Skill Matches</h3>
-              <p className="text-sm text-gray-500">Find the right resource for each project</p>
+              <h3 className="font-medium">Financial Reports</h3>
+              <p className="text-sm text-gray-500">Review project financials and budget tracking</p>
             </div>
           </div>
         </Link>

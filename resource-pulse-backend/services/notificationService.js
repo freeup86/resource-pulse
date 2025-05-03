@@ -38,19 +38,73 @@ const initializeService = async () => {
         }
       });
     } else {
-      // Create a test account for development
-      const testAccount = await nodemailer.createTestAccount();
-      emailTransporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass
-        }
-      });
-      
-      console.log('Notification service initialized with test email account:', testAccount.user);
+      try {
+        // Create a test account for development
+        const testAccount = await nodemailer.createTestAccount();
+        emailTransporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass
+          }
+        });
+        
+        console.log('Notification service initialized with test email account:', testAccount.user);
+        console.log(`Ethereal email web interface: https://ethereal.email/login`);
+        console.log(`Username: ${testAccount.user}`);
+        console.log(`Password: ${testAccount.pass}`);
+      } catch (emailError) {
+        console.error('Failed to create test email account:', emailError);
+        
+        // Create a fallback email transporter that logs emails instead of sending them
+        emailTransporter = {
+          sendMail: async (mail) => {
+            console.log('-----------------------------');
+            console.log('Email would have been sent:');
+            console.log('From:', mail.from);
+            console.log('To:', mail.to);
+            console.log('Subject:', mail.subject);
+            console.log('Text:', mail.text);
+            console.log('-----------------------------');
+            
+            // Return a mock successful response
+            return { 
+              messageId: `mock-${Date.now()}@resourcepulse.com`,
+              response: '250 Message accepted'
+            };
+          }
+        };
+        
+        console.log('Using fallback email transport that logs emails to console');
+      }
+    }
+    
+    // Verify email transporter connection
+    if (emailTransporter.verify) {
+      try {
+        await emailTransporter.verify();
+        console.log('SMTP connection verified successfully');
+      } catch (verifyError) {
+        console.error('SMTP connection verification failed:', verifyError);
+      }
+    }
+    
+    // Create MessageId column if it doesn't exist
+    try {
+      await pool.request().query(`
+        IF NOT EXISTS (
+          SELECT * FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_NAME = 'EmailQueue' AND COLUMN_NAME = 'MessageId'
+        )
+        BEGIN
+          ALTER TABLE EmailQueue ADD MessageId NVARCHAR(255) NULL;
+          PRINT 'Added MessageId column to EmailQueue table';
+        END
+      `);
+    } catch (alterError) {
+      console.error('Error checking/adding MessageId column:', alterError);
     }
     
     console.log('Notification service initialized successfully');
@@ -146,10 +200,19 @@ const createNotification = async (notification) => {
  * @param {number} userId - User ID
  * @param {string} subject - Email subject
  * @param {string} message - Email message
+ * @returns {Promise<boolean>} - Success status
  */
 const queueEmail = async (notificationId, userId, subject, message) => {
   try {
     const pool = await poolPromise;
+    
+    // Verify EmailQueue table exists
+    try {
+      await pool.request().query(`SELECT TOP 1 * FROM EmailQueue`);
+    } catch (tableError) {
+      console.error('EmailQueue table does not exist or is not accessible:', tableError.message);
+      return false;
+    }
     
     // Get user email
     const userResult = await pool.request()
@@ -162,10 +225,16 @@ const queueEmail = async (notificationId, userId, subject, message) => {
     
     if (userResult.recordset.length === 0 || !userResult.recordset[0].Email) {
       console.warn(`Cannot queue email for user ${userId}: Email not found`);
-      return;
+      return false;
     }
     
     const email = userResult.recordset[0].Email;
+    
+    // Validate email
+    if (!validateEmail(email)) {
+      console.warn(`Invalid email address for user ${userId}: ${email}`);
+      return false;
+    }
     
     // Create HTML body
     const htmlBody = `
@@ -207,17 +276,19 @@ const queueEmail = async (notificationId, userId, subject, message) => {
       .input('textBody', sql.NVarChar, textBody)
       .query(`
         INSERT INTO EmailQueue (
-          NotificationID, Recipient, Subject, HtmlBody, TextBody
+          NotificationID, Recipient, Subject, HtmlBody, TextBody, Status, CreatedAt
         )
         VALUES (
-          @notificationId, @recipient, @subject, @htmlBody, @textBody
+          @notificationId, @recipient, @subject, @htmlBody, @textBody, 'pending', GETDATE()
         )
       `);
     
     console.log(`Email queued for user ${userId} with notification ID ${notificationId}`);
+    return true;
   } catch (error) {
     console.error('Failed to queue email:', error);
-    throw error;
+    // Don't throw, just return false to indicate failure
+    return false;
   }
 };
 
@@ -227,12 +298,24 @@ const queueEmail = async (notificationId, userId, subject, message) => {
  */
 const processEmailQueue = async (limit = 10) => {
   if (!emailTransporter) {
-    console.warn('Email transporter not initialized');
-    return;
+    console.warn('Email transporter not initialized - attempting to initialize now');
+    const success = await initializeService();
+    if (!success || !emailTransporter) {
+      console.error('Failed to initialize email transporter');
+      return;
+    }
   }
   
   try {
     const pool = await poolPromise;
+    
+    // Verify EmailQueue table exists
+    try {
+      await pool.request().query(`SELECT TOP 1 * FROM EmailQueue`);
+    } catch (tableError) {
+      console.error('EmailQueue table does not exist or is not accessible:', tableError.message);
+      return;
+    }
     
     // Get pending emails
     const pendingEmailsResult = await pool.request()
@@ -248,6 +331,7 @@ const processEmailQueue = async (limit = 10) => {
     const pendingEmails = pendingEmailsResult.recordset;
     
     if (pendingEmails.length === 0) {
+      console.log('No pending emails to process');
       return;
     }
     
@@ -268,6 +352,13 @@ const processEmailQueue = async (limit = 10) => {
     // Process each email
     for (const email of pendingEmails) {
       try {
+        // Validate email before attempting to send
+        if (!email.Recipient || !validateEmail(email.Recipient)) {
+          console.error(`Invalid recipient email address: ${email.Recipient}`);
+          await updateEmailStatus(pool, email.EmailQueueID, 'failed', 'Invalid recipient email address');
+          continue;
+        }
+        
         // Send email
         const info = await emailTransporter.sendMail({
           from: fromEmail,
@@ -278,44 +369,68 @@ const processEmailQueue = async (limit = 10) => {
         });
         
         // Update status
-        await pool.request()
-          .input('emailId', sql.Int, email.EmailQueueID)
-          .input('messageId', sql.NVarChar, info.messageId)
-          .query(`
-            UPDATE EmailQueue
-            SET 
-              Status = 'sent',
-              SentAt = GETDATE(),
-              LastAttemptAt = GETDATE()
-            WHERE EmailQueueID = @emailId
-          `);
+        await updateEmailStatus(pool, email.EmailQueueID, 'sent', null, info.messageId);
         
         console.log(`Email sent: ${info.messageId}`);
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+        if (process.env.NODE_ENV !== 'production' && info.messageUrl) {
+          console.log(`Preview URL: ${info.messageUrl}`);
         }
       } catch (emailError) {
-        // Update retry count and error message
-        await pool.request()
-          .input('emailId', sql.Int, email.EmailQueueID)
-          .input('errorMessage', sql.NVarChar, emailError.message)
-          .query(`
-            UPDATE EmailQueue
-            SET 
-              Status = 'failed',
-              RetryCount = ISNULL(RetryCount, 0) + 1,
-              LastAttemptAt = GETDATE(),
-              ErrorMessage = @errorMessage
-            WHERE EmailQueueID = @emailId
-          `);
-        
         console.error(`Failed to send email ${email.EmailQueueID}:`, emailError);
+        await updateEmailStatus(pool, email.EmailQueueID, 'failed', emailError.message);
       }
     }
   } catch (error) {
     console.error('Failed to process email queue:', error);
-    throw error;
+    // Don't throw the error - just log it
   }
+};
+
+/**
+ * Helper function to update email status
+ */
+const updateEmailStatus = async (pool, emailId, status, errorMessage = null, messageId = null) => {
+  try {
+    const request = pool.request()
+      .input('emailId', sql.Int, emailId)
+      .input('status', sql.NVarChar, status)
+      .input('lastAttemptAt', sql.DateTime2, new Date());
+    
+    if (status === 'sent') {
+      request.input('messageId', sql.NVarChar, messageId)
+        .input('sentAt', sql.DateTime2, new Date())
+        .query(`
+          UPDATE EmailQueue
+          SET 
+            Status = @status,
+            SentAt = @sentAt,
+            LastAttemptAt = @lastAttemptAt,
+            MessageId = @messageId
+          WHERE EmailQueueID = @emailId
+        `);
+    } else if (status === 'failed') {
+      request.input('errorMessage', sql.NVarChar, errorMessage)
+        .query(`
+          UPDATE EmailQueue
+          SET 
+            Status = @status,
+            RetryCount = ISNULL(RetryCount, 0) + 1,
+            LastAttemptAt = @lastAttemptAt,
+            ErrorMessage = @errorMessage
+          WHERE EmailQueueID = @emailId
+        `);
+    }
+  } catch (error) {
+    console.error(`Failed to update email status (ID: ${emailId}):`, error);
+  }
+};
+
+/**
+ * Helper function to validate email
+ */
+const validateEmail = (email) => {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(String(email).toLowerCase());
 };
 
 /**

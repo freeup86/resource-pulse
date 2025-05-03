@@ -5,20 +5,23 @@ import { ProjectProvider } from './ProjectContext';
 import { RoleProvider } from './RoleContext';
 import { SettingsProvider } from './SettingsContext';
 import { CapacityProvider } from './CapacityContext';
+import { UserProvider } from './UserContext';
 
 const AppProvider = ({ children }) => {
   return (
-    <SettingsProvider>
-      <ResourceProvider>
-        <ProjectProvider>
-          <RoleProvider>
-            <CapacityProvider>
-              {children}
-            </CapacityProvider>
-          </RoleProvider>
-        </ProjectProvider>
-      </ResourceProvider>
-    </SettingsProvider>
+    <UserProvider>
+      <SettingsProvider>
+        <ResourceProvider>
+          <ProjectProvider>
+            <RoleProvider>
+              <CapacityProvider>
+                {children}
+              </CapacityProvider>
+            </RoleProvider>
+          </ProjectProvider>
+        </ResourceProvider>
+      </SettingsProvider>
+    </UserProvider>
   );
 };
 

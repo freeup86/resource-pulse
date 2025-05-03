@@ -2,21 +2,26 @@ import React, { useState, useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useResources } from '../../contexts/ResourceContext';
 import { useProjects } from '../../contexts/ProjectContext';
+import { useSkills } from '../../contexts/SkillsContext';
 import { formatDate, calculateDaysUntilEnd } from '../../utils/dateUtils';
 import { calculateTotalUtilization } from '../../utils/allocationUtils';
 import SkillTag from '../common/SkillTag';
 import StatusBadge from '../common/StatusBadge';
 import UtilizationBar from '../common/UtilizationBar';
 import AllocationForm from '../allocations/AllocationForm';
+import CertificationForm from '../skills/CertificationForm';
 import LoadingSpinner from '../common/LoadingSpinner';
 import ErrorMessage from '../common/ErrorMessage';
+import ResourceFinancials from './ResourceFinancials';
 
 const ResourceDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { resources, loading: resourcesLoading, error: resourcesError, deleteResource } = useResources();
   const { projects } = useProjects();
+  const { skills } = useSkills();
   const [showAllocationForm, setShowAllocationForm] = useState(false);
+  const [showCertificationForm, setShowCertificationForm] = useState(false);
   const [selectedAllocation, setSelectedAllocation] = useState(null);
   
   const resourceId = parseInt(id);
@@ -34,6 +39,10 @@ const ResourceDetail = () => {
   const handleEditAllocation = (allocation) => {
     setSelectedAllocation(allocation);
     setShowAllocationForm(true);
+  };
+
+  const handleAddCertification = () => {
+    setShowCertificationForm(true);
   };
   
   const handleDelete = () => {
@@ -86,11 +95,25 @@ const ResourceDetail = () => {
           </div>
           
           <div className="mt-6">
-            <h3 className="text-lg font-medium text-gray-900">Skills</h3>
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium text-gray-900">Skills</h3>
+            </div>
             <div className="flex flex-wrap gap-2 mt-2">
-              {resource.skills.map((skill, idx) => (
-                <SkillTag key={`skill-${idx}`} skill={skill} />
-              ))}
+              {resource.skills.map((skill, idx) => {
+                // Find the skill object to get additional info if available
+                const skillObj = typeof skill === 'string' 
+                  ? skills.find(s => s.name === skill) 
+                  : skills.find(s => s.name === skill.name);
+                
+                return (
+                  <SkillTag 
+                    key={`skill-${idx}`} 
+                    skill={typeof skill === 'string' ? skill : skill.name}
+                    proficiency={typeof skill === 'object' ? skill.proficiencyLevel : null}
+                    category={skillObj?.category}
+                  />
+                );
+              })}
             </div>
           </div>
           
@@ -192,6 +215,64 @@ const ResourceDetail = () => {
               </div>
             )}
           </div>
+          
+          {/* Certifications Section */}
+          <div className="mt-6">
+            <h3 className="text-lg font-medium text-gray-900">Skill Certifications</h3>
+            <div className="mt-2">
+              {resource.certifications && resource.certifications.length > 0 ? (
+                <div className="space-y-3">
+                  {resource.certifications.map((cert, idx) => (
+                    <div key={`cert-${idx}`} className="bg-gray-50 p-4 rounded-lg">
+                      <div className="flex justify-between">
+                        <h4 className="font-medium">{cert.certificationName}</h4>
+                        <div className="flex space-x-2">
+                          {cert.expiryDate && new Date(cert.expiryDate) < new Date() ? (
+                            <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Expired</span>
+                          ) : (
+                            <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Active</span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600">Skill: {cert.skillName}</p>
+                      {cert.issuer && <p className="text-sm text-gray-600">Issuer: {cert.issuer}</p>}
+                      <div className="flex space-x-4 mt-1 text-sm text-gray-500">
+                        {cert.issueDate && <div>Issued: {formatDate(cert.issueDate)}</div>}
+                        {cert.expiryDate && <div>Expires: {formatDate(cert.expiryDate)}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-gray-50 p-4 rounded-lg text-center">
+                  <p className="text-gray-500">No certifications added yet</p>
+                  <button 
+                    onClick={handleAddCertification}
+                    className="mt-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                  >
+                    Add Certification
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Financial Information Section */}
+          <div className="mt-8 p-4 border rounded-lg">
+            {resource.financials ? (
+              <ResourceFinancials 
+                resource={resource}
+                allocations={allocations}
+                financialSummary={resource.financialSummary}
+                currency={resource.currency || 'USD'}
+              />
+            ) : (
+              <div className="text-center p-4">
+                <h3 className="text-lg font-medium text-gray-900">Financial Information</h3>
+                <p className="text-gray-500 mt-2">No financial data available for this resource</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       
@@ -207,6 +288,15 @@ const ResourceDetail = () => {
             setSelectedAllocation(null);
           }}
         />
+      )}
+
+      {showCertificationForm && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <CertificationForm 
+            resourceId={resourceId}
+            onClose={() => setShowCertificationForm(false)}
+          />
+        </div>
       )}
     </div>
   );
