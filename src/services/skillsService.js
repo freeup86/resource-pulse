@@ -80,10 +80,32 @@ export const getSkillProficiencyLevels = async () => {
 // Get skills gap analysis
 export const getSkillsGapAnalysis = async () => {
   try {
-    const response = await api.get('/skills/gap-analysis');
+    const response = await api.get('/skills-gap/analysis');
     return response.data;
   } catch (error) {
     console.error('Error fetching skills gap analysis:', error);
+    throw error;
+  }
+};
+
+// Get training recommendations
+export const getTrainingRecommendations = async (params = {}) => {
+  try {
+    const response = await api.get('/skills-gap/training-recommendations', { params });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching training recommendations:', error);
+    throw error;
+  }
+};
+
+// Get hiring recommendations
+export const getHiringRecommendations = async (params = {}) => {
+  try {
+    const response = await api.get('/skills-gap/hiring-recommendations', { params });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching hiring recommendations:', error);
     throw error;
   }
 };

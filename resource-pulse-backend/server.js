@@ -17,6 +17,16 @@ const capacityRoutes = require('./routes/capacityRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const aiRecommendationRoutes = require('./routes/aiRecommendationRoutes');
 const skillRecommendationRoutes = require('./routes/skillRecommendationRoutes');
+const telemetryRoutes = require('./routes/telemetryRoutes');
+const matchingRoutes = require('./routes/matchingRoutes');  // AI-powered matching routes
+const utilizationForecastRoutes = require('./routes/utilizationForecastRoutes');  // AI-powered utilization forecasting routes
+const forecastRoutes = require('./routes/forecastRoutes');  // Advanced AI forecast routes
+const projectRiskRoutes = require('./routes/projectRiskRoutes');  // AI-powered project risk analysis routes
+const searchRoutes = require('./routes/searchRoutes');  // Natural language search routes
+const financialOptimizationRoutes = require('./routes/financialOptimizationRoutes');  // Financial optimization routes
+const skillsGapRoutes = require('./routes/skillsGapRoutes');  // Skills gap analysis routes
+const documentProcessingRoutes = require('./routes/documentProcessingRoutes');  // Document processing routes
+const clientSatisfactionRoutes = require('./routes/clientSatisfactionRoutes');  // Client satisfaction prediction routes
 const scheduledSyncService = require('./services/scheduledSyncService');
 const settingsController = require('./controllers/settingsController');
 const notificationService = require('./services/notificationService');
@@ -70,6 +80,16 @@ app.use('/api/capacity', capacityRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ai', aiRecommendationRoutes);  // AI recommendation routes
 app.use('/api', skillRecommendationRoutes);  // Skill recommendation routes
+app.use('/api/telemetry', telemetryRoutes);  // Telemetry and monitoring routes
+app.use('/api/matching', matchingRoutes);  // AI-powered resource-project matching routes
+app.use('/api/forecast', forecastRoutes);  // Advanced AI forecast routes (replaces older routes)
+app.use('/api/forecast/legacy', utilizationForecastRoutes);  // Legacy utilization forecasting routes
+app.use('/api/risk', projectRiskRoutes);  // AI-powered project risk analysis routes
+app.use('/api/search', searchRoutes);  // Natural language search routes
+app.use('/api/financial', financialOptimizationRoutes);  // Financial optimization routes
+app.use('/api/skills-gap', skillsGapRoutes);  // Skills gap analysis routes
+app.use('/api/documents', documentProcessingRoutes);  // Document processing routes
+app.use('/api/satisfaction', clientSatisfactionRoutes);  // Client satisfaction prediction routes
 
 // Initialize system settings before starting server
 settingsController.initializeSettings();

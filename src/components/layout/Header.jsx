@@ -1,31 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, Settings } from 'lucide-react';
+import { Menu, Settings, Bell, Lightbulb } from 'lucide-react';
 import NotificationCenter from '../notifications/NotificationCenter';
+import { getUnreadCount } from '../../services/notificationService';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
+  const [isAiMenuOpen, setIsAiMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notificationsCount, setNotificationsCount] = useState(0);
+  
+  useEffect(() => {
+    // Fetch unread notifications count
+    const fetchUnreadCount = async () => {
+      try {
+        const count = await getUnreadCount();
+        setNotificationsCount(count);
+      } catch (error) {
+        console.error('Error fetching unread notifications count:', error);
+      }
+    };
+
+    fetchUnreadCount();
+    // Set up interval to check for new notifications
+    const interval = setInterval(fetchUnreadCount, 60000); // Check every minute
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const toggleNotifications = () => {
+    setIsNotificationsOpen(!isNotificationsOpen);
+  };
   
   return (
     <header className="bg-blue-600 text-white p-4 shadow-md">
       <div className="container mx-auto flex justify-between items-center">
         <Link to="/" className="text-2xl font-bold">ResourcePulse</Link>
         
-        <div className="flex items-center md:hidden">
-          {/* Mobile notification center */}
-          <div className="mr-4">
-            <NotificationCenter />
-          </div>
-          
-          {/* Mobile menu button */}
-          <button 
-            className="md:hidden"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-        </div>
+        {/* Mobile menu button */}
+        <button 
+          className="md:hidden"
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+        >
+          <Menu className="h-6 w-6" />
+        </button>
         
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-4">
@@ -33,19 +52,99 @@ const Header = () => {
             <li><Link to="/" className="hover:underline">Dashboard</Link></li>
             <li><Link to="/resources" className="hover:underline">Resources</Link></li>
             <li><Link to="/projects" className="hover:underline">Projects</Link></li>
-            <li><Link to="/allocations" className="hover:underline">Allocations</Link></li>
             <li><Link to="/timeline" className="hover:underline">Timeline</Link></li>
-            <li><Link to="/capacity" className="hover:underline">Capacity</Link></li>
             <li><Link to="/analytics" className="hover:underline">Analytics</Link></li>
           </ul>
           
-          {/* Notification Center */}
-          <div className="relative mx-4">
-            <NotificationCenter />
+          {/* AI Features dropdown */}
+          <div className="relative ml-2">
+            <button 
+              className="flex items-center hover:underline"
+              onClick={() => setIsAiMenuOpen(!isAiMenuOpen)}
+            >
+              <Lightbulb className="h-5 w-5 mr-1" />
+              <span>AI Tools</span>
+            </button>
+            
+            {isAiMenuOpen && (
+              <div className="absolute left-0 mt-2 w-52 bg-white text-gray-800 rounded shadow-lg z-10">
+                <Link 
+                  to="/ai/forecast" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAiMenuOpen(false)}
+                >
+                  Utilization Forecast
+                </Link>
+                <Link 
+                  to="/ai/risk" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAiMenuOpen(false)}
+                >
+                  Project Risk Analysis
+                </Link>
+                <Link 
+                  to="/ai/search" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAiMenuOpen(false)}
+                >
+                  Natural Language Search
+                </Link>
+                <Link 
+                  to="/ai/finance" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAiMenuOpen(false)}
+                >
+                  Financial Optimization
+                </Link>
+                <Link 
+                  to="/ai/skills" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAiMenuOpen(false)}
+                >
+                  Skills Gap Analysis
+                </Link>
+                <Link 
+                  to="/ai/documents" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAiMenuOpen(false)}
+                >
+                  Document Processing
+                </Link>
+                <Link 
+                  to="/ai/satisfaction" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAiMenuOpen(false)}
+                >
+                  Client Satisfaction
+                </Link>
+              </div>
+            )}
+          </div>
+          
+          {/* Notifications Icon */}
+          <div className="relative ml-2">
+            <button 
+              className="relative hover:text-gray-200"
+              onClick={toggleNotifications}
+              aria-label="Notifications"
+            >
+              <Bell className="h-5 w-5" />
+              {notificationsCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {notificationsCount > 99 ? '99+' : notificationsCount}
+                </span>
+              )}
+            </button>
+            
+            {isNotificationsOpen && (
+              <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-md shadow-lg z-50 text-gray-800">
+                <NotificationCenter />
+              </div>
+            )}
           </div>
           
           {/* Admin dropdown */}
-          <div className="relative ml-4">
+          <div className="relative ml-2">
             <button 
               className="flex items-center hover:underline"
               onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
@@ -130,15 +229,6 @@ const Header = () => {
                 </li>
                 <li>
                   <Link 
-                    to="/allocations" 
-                    className="block p-2 hover:bg-blue-700 rounded"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Allocations
-                  </Link>
-                </li>
-                <li>
-                  <Link 
                     to="/timeline" 
                     className="block p-2 hover:bg-blue-700 rounded"
                     onClick={() => setIsMenuOpen(false)}
@@ -148,17 +238,90 @@ const Header = () => {
                 </li>
                 <li>
                   <Link 
-                    to="/capacity" 
+                    to="/analytics" 
                     className="block p-2 hover:bg-blue-700 rounded"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    Capacity
+                    Analytics
+                  </Link>
+                </li>
+                
+                {/* AI Features for mobile */}
+                <li className="pt-2 pb-1 px-2 text-gray-200 font-medium">
+                  AI Tools
+                </li>
+                <li>
+                  <Link 
+                    to="/ai/forecast" 
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Utilization Forecast
                   </Link>
                 </li>
                 <li>
                   <Link 
+                    to="/ai/risk" 
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Project Risk Analysis
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/ai/search" 
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Natural Language Search
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/ai/finance" 
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Financial Optimization
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/ai/skills" 
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Skills Gap Analysis
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/ai/documents" 
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Document Processing
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/ai/satisfaction" 
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Client Satisfaction
+                  </Link>
+                </li>
+                
+                {/* Admin section for mobile */}
+                <li className="pt-2 pb-1 px-2 text-gray-200 font-medium">
+                  Admin
+                </li>
+                <li>
+                  <Link 
                     to="/admin/roles" 
-                    className="block p-2 hover:bg-blue-700 rounded"
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Role Management
@@ -167,7 +330,7 @@ const Header = () => {
                 <li>
                   <Link 
                     to="/admin/import" 
-                    className="block p-2 hover:bg-blue-700 rounded"
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Import Data
@@ -176,8 +339,8 @@ const Header = () => {
                 <li>
                   <Link 
                     to="/admin/export" 
-                    className="block px-4 py-2 hover:bg-blue-100"
-                    onClick={() => setIsAdminMenuOpen(false)}
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
                   >
                     Export Data
                   </Link>
@@ -185,8 +348,8 @@ const Header = () => {
                 <li>
                   <Link 
                     to="/admin/sync" 
-                    className="block px-4 py-2 hover:bg-blue-100"
-                    onClick={() => setIsAdminMenuOpen(false)}
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
                   >
                     External Sync
                   </Link>
@@ -194,14 +357,28 @@ const Header = () => {
                 <li>
                   <Link 
                     to="/admin/settings" 
-                    className="block px-4 py-2 hover:bg-blue-100"
-                    onClick={() => setIsAdminMenuOpen(false)}
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
                   >
                     System Settings
                   </Link>
                 </li>
+                
+                {/* Notifications for mobile */}
                 <li>
-                  <Link to="/analytics" className="hover:underline">Analytics</Link>
+                  <Link
+                    to="/notifications"
+                    className="block p-2 hover:bg-blue-700 rounded flex items-center"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <Bell className="h-5 w-5 mr-2" />
+                    Notifications
+                    {notificationsCount > 0 && (
+                      <span className="ml-2 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {notificationsCount > 99 ? '99+' : notificationsCount}
+                      </span>
+                    )}
+                  </Link>
                 </li>
               </ul>
             </nav>

@@ -17,6 +17,9 @@ router.put('/users/:userId/settings', notificationController.updateUserSettings)
 router.get('/settings', notificationController.getSystemSettings);
 router.put('/settings', notificationController.updateSystemSettings);
 
+// AI-powered features
+router.get('/notifications/:notificationId/action', notificationController.getActionSuggestion);
+
 // Testing/debug endpoints
 router.post('/users/:userId/digest', notificationController.triggerWeeklyDigest);
 router.post('/process-emails', notificationController.processEmailQueue);

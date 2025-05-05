@@ -1,6 +1,90 @@
-# Getting Started with Create React App
+# ResourcePulse
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+ResourcePulse is a comprehensive resource allocation and management application designed for professional service organizations to efficiently manage their projects, resources, skills, and allocations.
+
+## Features
+
+### Core Functionality
+- Resource Management: Track skills, capacity, and availability
+- Project Management: Manage project details, timelines, and required skills
+- Allocation Management: Allocate resources to projects with utilization tracking
+- Timeline Visualization: Visual timeline of allocations and project schedules
+- Analytics Dashboard: Resource utilization and project analytics
+
+### AI-Enhanced Features
+- **AI-Powered Skill Recommendations**: Get intelligent recommendations for skill development based on project requirements
+- **Personalized Learning Paths**: Customized training recommendations based on experience level, learning style, and constraints
+- **Skill Gap Analysis**: Identify skill gaps and get AI suggestions for closing them
+
+## Getting Started
+
+### Prerequisites
+- Node.js 14+
+- SQL Server Database
+- OpenAI API Key (for AI-powered features)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/resource-pulse.git
+cd resource-pulse
+
+# Install frontend dependencies
+npm install
+
+# Install backend dependencies
+cd resource-pulse-backend
+npm install
+cd ..
+```
+
+### Configuration
+
+1. Create a `.env` file in the `resource-pulse-backend` directory based on `.env.example`
+2. Configure your database connection
+3. Add your OpenAI API Key for AI-powered features
+
+### Running the Application
+
+```bash
+# Start the frontend development server
+npm start
+
+# In a separate terminal, start the backend server
+cd resource-pulse-backend
+npm run dev
+```
+
+## Using AI-Powered Features
+
+### Skill Recommendations
+
+ResourcePulse can generate intelligent recommendations for skill development based on project requirements. To use this feature:
+
+1. Navigate to a Project Detail page
+2. Click "Generate AI Recommendations" button
+3. View the AI-generated recommendations for each required skill
+
+### Personalized Learning Paths
+
+For more tailored recommendations, you can set your preferences:
+
+1. Click "Personalize Recommendations" on the recommendation panel
+2. Configure your preferences:
+   - Experience Level: Beginner to Expert
+   - Learning Style: Visual, Reading, Interactive, or Social
+   - Budget Constraints: Set maximum budget per skill
+   - Time Constraints: Set available hours for learning
+
+The AI will generate customized recommendations based on your specific needs and constraints.
+
+## Technology Stack
+
+- **Frontend**: React, Tailwind CSS
+- **Backend**: Express.js, Node.js
+- **Database**: SQL Server
+- **AI Integration**: OpenAI API
 
 ## Available Scripts
 
@@ -11,60 +95,18 @@ In the project directory, you can run:
 Runs the app in the development mode.\
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
-
 ### `npm test`
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Launches the test runner in the interactive watch mode.
 
 ### `npm run build`
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Builds the app for production to the `build` folder.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Contributing
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-### `npm run eject`
+## License
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+This project is licensed under the MIT License - see the LICENSE file for details.

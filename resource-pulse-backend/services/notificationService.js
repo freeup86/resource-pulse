@@ -1,6 +1,17 @@
 // notificationService.js
 const { poolPromise, sql } = require('../db/config');
 const nodemailer = require('nodemailer');
+const Anthropic = require('@anthropic-ai/sdk');
+const aiTelemetry = require('./aiTelemetry');
+require('dotenv').config();
+
+// Get API key from environment variables
+const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
+
+// Initialize Claude client
+const claude = CLAUDE_API_KEY ? new Anthropic({
+  apiKey: CLAUDE_API_KEY,
+}) : null;
 
 // Initialize email transport
 let emailTransporter = null;
@@ -673,6 +684,310 @@ const generateWeeklyDigest = async (userId) => {
   }
 };
 
+/**
+ * Prioritize notifications using AI
+ * @param {Array} notifications - List of notifications to prioritize
+ * @param {Object} userContext - User context for personalization
+ * @returns {Promise<Array>} - Prioritized notifications
+ */
+const prioritizeNotifications = async (notifications, userContext = {}) => {
+  // Skip AI prioritization if no Claude API key
+  if (!CLAUDE_API_KEY || !claude) {
+    console.warn('Claude API key not configured. Skipping AI prioritization of notifications.');
+    // Use simple default prioritization
+    return prioritizeNotificationsDefault(notifications);
+  }
+  
+  try {
+    // Skip for very small sets
+    if (notifications.length <= 1) {
+      return notifications;
+    }
+    
+    // Create prompt for Claude
+    const prompt = `
+<instructions>
+You are an intelligent notification prioritization system. Given a list of notifications, you need to:
+1. Analyze each notification's content, type, and context
+2. Prioritize them based on urgency, importance, and relevance to the user
+3. Return the notifications ordered by priority, with a calculated priorityScore (0.0-1.0)
+4. For each notification, add a "suggestedAction" field with a brief sentence of what action the user should take
+
+The prioritization should consider:
+- Deadlines proximity (more urgent = higher priority)
+- Resource utilization issues (over-allocation = high priority)
+- Project status changes (critical changes = high priority)
+- User role and responsibilities (match notifications to responsibilities)
+- Notification age (newer generally more relevant, unless deadline-sensitive)
+
+Return only a JSON array with the prioritized notifications.
+Each object should have all original fields plus:
+- priorityScore: number between 0 and 1
+- priorityReason: brief explanation of why this priority was assigned
+- suggestedAction: recommended next step for the user
+</instructions>
+
+<user_context>
+User ID: ${userContext.userId || 'Unknown'}
+User Role: ${userContext.role || 'Resource Manager'}
+User Notifications Preferences: ${userContext.preferences || 'All notification types'}
+</user_context>
+
+<notifications>
+${JSON.stringify(notifications, null, 2)}
+</notifications>
+`;
+
+    // Make API request
+    const response = await claude.messages.create({
+      model: "claude-3-haiku-20240307",
+      max_tokens: 1500,
+      temperature: 0.3,
+      messages: [
+        {
+          role: "user",
+          content: prompt
+        }
+      ]
+    });
+    
+    // Process and parse response
+    const responseText = response.content[0].text.trim();
+    try {
+      const prioritizedNotifications = JSON.parse(responseText);
+      
+      // Sort by priority score if available
+      prioritizedNotifications.sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0));
+      
+      return prioritizedNotifications;
+    } catch (parseError) {
+      console.error('Error parsing AI prioritization response:', parseError);
+      // Fall back to default prioritization
+      return prioritizeNotificationsDefault(notifications);
+    }
+  } catch (error) {
+    console.error('Error prioritizing notifications with AI:', error);
+    // Fall back to default prioritization
+    return prioritizeNotificationsDefault(notifications);
+  }
+};
+
+/**
+ * Default notification prioritization without AI
+ * @param {Array} notifications - List of notifications to prioritize
+ * @returns {Array} - Prioritized notifications
+ */
+const prioritizeNotificationsDefault = (notifications) => {
+  // Simple priority rules
+  const typePriority = {
+    'resource_conflict': 5,        // Highest priority
+    'capacity_threshold': 4,
+    'deadline_approaching': 3,
+    'allocation_updated': 2,
+    'allocation_created': 1,
+    'allocation_deleted': 1,
+    'weekly_digest': 0             // Lowest priority
+  };
+  
+  // Sort by type priority and then by date (newer first)
+  return notifications.sort((a, b) => {
+    const priorityA = typePriority[a.type] || 0;
+    const priorityB = typePriority[b.type] || 0;
+    
+    if (priorityB !== priorityA) {
+      return priorityB - priorityA;
+    }
+    
+    // If same priority, sort by date (newer first)
+    const dateA = new Date(a.createdAt || a.created_at || Date.now());
+    const dateB = new Date(b.createdAt || b.created_at || Date.now());
+    return dateB - dateA;
+  }).map(notification => ({
+    ...notification,
+    priorityScore: (typePriority[notification.type] || 0) / 5, // Normalized to 0-1
+    priorityReason: `Based on notification type: ${notification.type}`,
+    suggestedAction: generateDefaultSuggestedAction(notification)
+  }));
+};
+
+/**
+ * Generate default suggested action for a notification
+ * @param {Object} notification - Notification object
+ * @returns {string} - Suggested action
+ */
+const generateDefaultSuggestedAction = (notification) => {
+  switch (notification.type) {
+    case 'resource_conflict':
+      return 'Review and resolve the allocation conflict.';
+    case 'capacity_threshold':
+      return 'Adjust resource allocation to reduce overallocation.';
+    case 'deadline_approaching':
+      return 'Verify if the allocation needs to be extended.';
+    case 'allocation_updated':
+      return 'Review the updated allocation details.';
+    case 'allocation_created':
+      return 'Confirm the new allocation details.';
+    case 'allocation_deleted':
+      return 'Verify if the resource needs reallocation.';
+    case 'weekly_digest':
+      return 'Review your resource status and upcoming deadlines.';
+    default:
+      return 'Review this notification.';
+  }
+};
+
+/**
+ * Generate action suggestion for a notification using AI
+ * @param {Object} notification - Notification to generate suggestion for
+ * @param {Object} userContext - User context for personalization
+ * @returns {Promise<Object>} - Notification with suggested action
+ */
+const generateActionSuggestion = async (notification, userContext = {}) => {
+  // Skip AI suggestion if no Claude API key
+  if (!CLAUDE_API_KEY || !claude) {
+    console.warn('Claude API key not configured. Using default action suggestion.');
+    return {
+      ...notification,
+      suggestedAction: generateDefaultSuggestedAction(notification)
+    };
+  }
+  
+  try {
+    // Create prompt for Claude
+    const prompt = `
+<instructions>
+You are an intelligent notification system assistant. Given a notification from a resource management system, you need to:
+1. Analyze the notification content and type
+2. Generate a concise, actionable suggestion for what the user should do next
+3. Ensure the suggestion is specific and helpful
+4. Return ONLY the suggested action text (1-2 sentences maximum)
+
+The suggested action should:
+- Be direct and start with a verb
+- Be specific to the notification content
+- Provide clear next steps
+- Be concise (maximum 15 words if possible)
+</instructions>
+
+<notification>
+${JSON.stringify(notification, null, 2)}
+</notification>
+
+<user_context>
+User ID: ${userContext.userId || 'Unknown'}
+User Role: ${userContext.role || 'Resource Manager'}
+</user_context>
+`;
+
+    // Make API request
+    const response = await claude.messages.create({
+      model: "claude-3-haiku-20240307",
+      max_tokens: 200,
+      temperature: 0.3,
+      messages: [
+        {
+          role: "user",
+          content: prompt
+        }
+      ]
+    });
+    
+    // Extract suggestion
+    const suggestedAction = response.content[0].text.trim();
+    
+    return {
+      ...notification,
+      suggestedAction
+    };
+  } catch (error) {
+    console.error('Error generating action suggestion with AI:', error);
+    // Fall back to default suggestion
+    return {
+      ...notification,
+      suggestedAction: generateDefaultSuggestedAction(notification)
+    };
+  }
+};
+
+/**
+ * Get user's notifications with prioritization
+ * @param {number} userId - User ID
+ * @param {Object} options - Options for filtering
+ * @returns {Promise<Array>} - Prioritized notifications
+ */
+const getUserNotifications = async (userId, options = {}) => {
+  try {
+    const pool = await poolPromise;
+    const { limit = 50, includeRead = false, prioritize = true } = options;
+    
+    // Get user info for context
+    const userResult = await pool.request()
+      .input('userId', sql.Int, userId)
+      .query(`
+        SELECT Role
+        FROM Resources
+        WHERE ResourceID = @userId
+      `);
+    
+    const userRole = userResult.recordset.length > 0 ? userResult.recordset[0].Role : 'Resource';
+    
+    // Get user's notifications
+    let query = `
+      SELECT 
+        n.NotificationID,
+        n.NotificationTypeID,
+        nt.Name as Type,
+        n.Title,
+        n.Message,
+        n.RelatedEntityType,
+        n.RelatedEntityID,
+        n.IsRead,
+        n.CreatedAt,
+        n.ExpiresAt
+      FROM Notifications n
+      INNER JOIN NotificationTypes nt ON n.NotificationTypeID = nt.NotificationTypeID
+      WHERE n.UserID = @userId
+    `;
+    
+    if (!includeRead) {
+      query += ` AND n.IsRead = 0`;
+    }
+    
+    query += ` ORDER BY n.CreatedAt DESC`;
+    
+    if (limit > 0) {
+      query += ` OFFSET 0 ROWS FETCH NEXT @limit ROWS ONLY`;
+    }
+    
+    const notificationsResult = await pool.request()
+      .input('userId', sql.Int, userId)
+      .input('limit', sql.Int, limit)
+      .query(query);
+    
+    let notifications = notificationsResult.recordset.map(notification => ({
+      id: notification.NotificationID,
+      type: notification.Type,
+      title: notification.Title,
+      message: notification.Message,
+      relatedEntityType: notification.RelatedEntityType,
+      relatedEntityId: notification.RelatedEntityID,
+      isRead: notification.IsRead,
+      createdAt: notification.CreatedAt,
+      expiresAt: notification.ExpiresAt
+    }));
+    
+    // Apply AI prioritization if requested
+    if (prioritize && notifications.length > 0) {
+      notifications = await prioritizeNotifications(notifications, { userId, role: userRole });
+    }
+    
+    return notifications;
+  } catch (error) {
+    console.error('Error getting user notifications:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   initializeService,
   createNotification,
@@ -681,5 +996,8 @@ module.exports = {
   notifyDeadlineApproaching,
   notifyCapacityThreshold,
   notifyResourceConflict,
-  generateWeeklyDigest
+  generateWeeklyDigest,
+  prioritizeNotifications,
+  generateActionSuggestion,
+  getUserNotifications
 };

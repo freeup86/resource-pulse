@@ -12,6 +12,8 @@ export const SkillsProvider = ({ children }) => {
   const [categories, setCategories] = useState([]);
   const [proficiencyLevels, setProficiencyLevels] = useState([]);
   const [gapAnalysis, setGapAnalysis] = useState([]);
+  const [trainingRecommendations, setTrainingRecommendations] = useState([]);
+  const [hiringRecommendations, setHiringRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -55,8 +57,32 @@ export const SkillsProvider = ({ children }) => {
     try {
       const data = await skillsService.getSkillsGapAnalysis();
       setGapAnalysis(data);
+      return data; // Return the data for components to use directly
     } catch (err) {
       console.error('Error fetching skills gap analysis:', err);
+      throw err; // Rethrow to allow components to catch errors
+    }
+  }, []);
+  
+  // Fetch training recommendations
+  const fetchTrainingRecommendations = useCallback(async (params = {}) => {
+    try {
+      const data = await skillsService.getTrainingRecommendations(params);
+      setTrainingRecommendations(data);
+      return data;
+    } catch (err) {
+      console.error('Error fetching training recommendations:', err);
+    }
+  }, []);
+  
+  // Fetch hiring recommendations
+  const fetchHiringRecommendations = useCallback(async (params = {}) => {
+    try {
+      const data = await skillsService.getHiringRecommendations(params);
+      setHiringRecommendations(data);
+      return data;
+    } catch (err) {
+      console.error('Error fetching hiring recommendations:', err);
     }
   }, []);
 
@@ -135,10 +161,14 @@ export const SkillsProvider = ({ children }) => {
     categories,
     proficiencyLevels,
     gapAnalysis,
+    trainingRecommendations,
+    hiringRecommendations,
     loading,
     error,
     fetchSkills,
     fetchGapAnalysis,
+    fetchTrainingRecommendations,
+    fetchHiringRecommendations,
     addSkill,
     updateSkill,
     deleteSkill,

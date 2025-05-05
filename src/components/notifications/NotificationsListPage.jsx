@@ -21,7 +21,36 @@ const NotificationsListPage = () => {
     try {
       setLoading(true);
       const data = await getNotifications();
-      setNotifications(data);
+      
+      // Process and validate notification data
+      const processedData = Array.isArray(data) ? data.map(notification => {
+        // Ensure we have a valid date string
+        let dateString = null;
+        try {
+          // Try to use the existing date or create a new one
+          if (notification.createdAt && notification.createdAt.length > 0) {
+            dateString = notification.createdAt;
+          } else if (notification.created_at && notification.created_at.length > 0) {
+            dateString = notification.created_at;
+          } else {
+            dateString = new Date().toISOString();
+          }
+          // Validate the date is parseable
+          new Date(dateString);
+        } catch (e) {
+          console.warn('Invalid date format, using current date instead', e);
+          dateString = new Date().toISOString();
+        }
+        
+        return {
+          ...notification,
+          // Ensure consistent property names
+          is_read: notification.isRead || notification.is_read || false,
+          created_at: dateString
+        };
+      }) : [];
+      
+      setNotifications(processedData);
       setError(null);
     } catch (err) {
       setError('Failed to load notifications');
@@ -167,7 +196,7 @@ const NotificationsListPage = () => {
                         </span>
                         <div className="flex items-center">
                           <span className="text-xs text-gray-500 mr-3">
-                            {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                            {notification.created_at ? formatDistanceToNow(new Date(notification.created_at), { addSuffix: true }) : 'Just now'}
                           </span>
                           <button 
                             className="text-gray-400 hover:text-red-500"

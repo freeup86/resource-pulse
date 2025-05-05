@@ -10,7 +10,8 @@ import AllocationForm from '../allocations/AllocationForm';
 import SkillRecommendationForm from '../skills/SkillRecommendationForm';
 import ProjectFinancials from './ProjectFinancials';
 import AiRecommendationDisplay from './AiRecommendationDisplay';
-import { generateRecommendations, saveRecommendation } from '../../services/aiRecommendationService';
+import SavedRecommendationsPanel from './SavedRecommendationsPanel';
+import { generateRecommendations, saveRecommendation, deleteRecommendation } from '../../services/aiRecommendationService';
 import api from '../../services/api';
 
 const ProjectDetail = ({ project }) => {
@@ -293,34 +294,6 @@ const ProjectDetail = ({ project }) => {
         <div className="mt-6">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-medium text-gray-900">Required Skills</h3>
-            <div className="flex space-x-2">
-              <button
-                onClick={handleGenerateAiRecommendations}
-                disabled={isLoadingRecommendations || !project.requiredSkills || project.requiredSkills.length === 0}
-                className={`flex items-center px-3 py-1 text-sm rounded ${
-                  isLoadingRecommendations || !project.requiredSkills || project.requiredSkills.length === 0
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-purple-600 text-white hover:bg-purple-700'
-                }`}
-              >
-                {isLoadingRecommendations ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Generating...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                    </svg>
-                    <span>AI Suggest Development</span>
-                  </>
-                )}
-              </button>
-            </div>
           </div>
           <div className="flex flex-wrap gap-2 mt-2">
             {project.requiredSkills && project.requiredSkills.length > 0 ? (
@@ -437,110 +410,99 @@ const ProjectDetail = ({ project }) => {
         
         {/* Skill Development Recommendations Section */}
         <div className="mt-6">
-          <h3 className="text-lg font-medium text-gray-900">Skill Development Recommendations</h3>
-          <div className="mt-2">
-            {savedRecommendations.length > 0 || (project.skillRecommendations && project.skillRecommendations.length > 0) ? (
-              <div className="space-y-3">
-                {/* Display saved recommendations from our API */}
-                {savedRecommendations.map((rec) => (
-                  <div key={`saved-rec-${rec.id}`} className="bg-gray-50 p-4 rounded-lg">
-                    <div className="flex justify-between">
-                      <h4 className="font-medium">{rec.title}</h4>
-                      <span className="text-sm text-gray-600">
-                        {rec.estimatedTimeHours && `${rec.estimatedTimeHours} hours`}
-                        {rec.cost && rec.estimatedTimeHours && ' • '}
-                        {rec.cost && `$${rec.cost}`}
-                        {rec.aiGenerated && (
-                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                            AI Generated
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">Skill: {rec.skillName}</p>
-                    {rec.description && <p className="mt-1 text-sm">{rec.description}</p>}
-                    {rec.resourceUrl && (
-                      <a 
-                        href={rec.resourceUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-block text-sm text-blue-600 hover:underline"
-                      >
-                        View Resource
-                      </a>
-                    )}
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium text-gray-900">Skill Development Recommendations</h3>
+            <div className="flex space-x-2">
+              <button 
+                onClick={() => setShowRecommendationForm(true)}
+                className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm"
+              >
+                Add Recommendation
+              </button>
+              
+              {project.requiredSkills && project.requiredSkills.length > 0 && (
+                <button 
+                  onClick={handleGenerateAiRecommendations}
+                  disabled={isLoadingRecommendations}
+                  className={`flex items-center px-3 py-1 text-sm rounded ${
+                    isLoadingRecommendations 
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-purple-600 text-white hover:bg-purple-700'
+                  }`}
+                >
+                  {isLoadingRecommendations ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                      </svg>
+                      <span>AI Suggest</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* New SavedRecommendationsPanel component */}
+          <SavedRecommendationsPanel 
+            projectId={project.id}
+            projectName={project.name}
+            onRecommendationDeleted={(recommendationId) => {
+              // Update the local state to remove the deleted recommendation
+              setSavedRecommendations(prev => 
+                prev.filter(rec => rec.id !== recommendationId)
+              );
+            }}
+          />
+          
+          {/* Empty state shown only if no recommendations */}
+          {savedRecommendations.length === 0 && (!project.skillRecommendations || project.skillRecommendations.length === 0) && (
+            <div className="bg-gray-50 p-4 rounded-lg text-center mt-2">
+              <p className="text-gray-500">No skill development recommendations added yet</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Add recommendations manually or use AI to generate suggestions based on project skills.
+              </p>
+            </div>
+          )}
+          
+          {/* Legacy recommendations display if they exist */}
+          {project.skillRecommendations && project.skillRecommendations.length > 0 && (
+            <div className="mt-4 space-y-3">
+              <h4 className="text-md font-medium text-gray-700">Legacy Recommendations</h4>
+              {project.skillRecommendations.map((rec, idx) => (
+                <div key={`rec-${idx}`} className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex justify-between">
+                    <h4 className="font-medium">{rec.title}</h4>
+                    <span className="text-sm text-gray-600">
+                      {rec.estimatedTimeHours && `${rec.estimatedTimeHours} hours`}
+                      {rec.cost && rec.estimatedTimeHours && ' • '}
+                      {rec.cost && `$${rec.cost}`}
+                    </span>
                   </div>
-                ))}
-                
-                {/* Display traditional project recommendations if they exist */}
-                {project.skillRecommendations && project.skillRecommendations.map((rec, idx) => (
-                  <div key={`rec-${idx}`} className="bg-gray-50 p-4 rounded-lg">
-                    <div className="flex justify-between">
-                      <h4 className="font-medium">{rec.title}</h4>
-                      <span className="text-sm text-gray-600">
-                        {rec.estimatedTimeHours && `${rec.estimatedTimeHours} hours`}
-                        {rec.cost && rec.estimatedTimeHours && ' • '}
-                        {rec.cost && `$${rec.cost}`}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">Skill: {rec.skillName}</p>
-                    {rec.description && <p className="mt-1 text-sm">{rec.description}</p>}
-                    {rec.resourceUrl && (
-                      <a 
-                        href={rec.resourceUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-block text-sm text-blue-600 hover:underline"
-                      >
-                        View Resource
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-gray-50 p-4 rounded-lg text-center">
-                <p className="text-gray-500">No skill development recommendations added yet</p>
-                <div className="flex justify-center space-x-2 mt-2">
-                  <button 
-                    onClick={() => setShowRecommendationForm(true)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                  >
-                    Add Recommendation
-                  </button>
-                  
-                  {project.requiredSkills && project.requiredSkills.length > 0 && (
-                    <button 
-                      onClick={handleGenerateAiRecommendations}
-                      disabled={isLoadingRecommendations}
-                      className={`flex items-center px-4 py-2 rounded ${
-                        isLoadingRecommendations 
-                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : 'bg-purple-600 text-white hover:bg-purple-700'
-                      }`}
+                  <p className="text-sm text-gray-600">Skill: {rec.skillName}</p>
+                  {rec.description && <p className="mt-1 text-sm">{rec.description}</p>}
+                  {rec.resourceUrl && (
+                    <a 
+                      href={rec.resourceUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-block text-sm text-blue-600 hover:underline"
                     >
-                      {isLoadingRecommendations ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          <span>Generating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                          </svg>
-                          <span>AI Suggest</span>
-                        </>
-                      )}
-                    </button>
+                      View Resource
+                    </a>
                   )}
                 </div>
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
         
         {/* Financial Information Section */}

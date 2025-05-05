@@ -3,13 +3,42 @@ const { poolPromise, sql } = require('../db/config');
 const notificationService = require('../services/notificationService');
 
 /**
- * Get notifications for a user
+ * Get notifications for a user with AI prioritization
  */
 const getUserNotifications = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { limit = 20, offset = 0, unreadOnly = false } = req.query;
+    const { limit = 20, offset = 0, unreadOnly = false, prioritize = 'true' } = req.query;
     
+    // Use enhanced service method with AI prioritization
+    if (prioritize === 'true') {
+      const notifications = await notificationService.getUserNotifications(
+        parseInt(userId),
+        {
+          limit: parseInt(limit),
+          includeRead: unreadOnly !== 'true',
+          prioritize: true
+        }
+      );
+      
+      // Get total count for pagination (simple count, no prioritization)
+      const pool = await poolPromise;
+      const countResult = await pool.request()
+        .input('userId', sql.Int, userId)
+        .query(`
+          SELECT COUNT(*) as total
+          FROM Notifications 
+          WHERE UserID = @userId ${unreadOnly === 'true' ? 'AND IsRead = 0' : ''}
+        `);
+      
+      res.json({
+        notifications,
+        total: countResult.recordset[0].total
+      });
+      return;
+    }
+    
+    // Fall back to original database query if prioritization is disabled
     const pool = await poolPromise;
     
     // Build query with optional unread filter
@@ -390,6 +419,66 @@ const processEmailQueue = async (req, res) => {
   }
 };
 
+/**
+ * Generate action suggestion for a notification
+ */
+const getActionSuggestion = async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    
+    // Get notification details
+    const pool = await poolPromise;
+    const notificationResult = await pool.request()
+      .input('notificationId', sql.Int, notificationId)
+      .query(`
+        SELECT 
+          n.NotificationID as id,
+          nt.Name as type,
+          n.Title as title,
+          n.Message as message,
+          n.RelatedEntityType as relatedEntityType,
+          n.RelatedEntityID as relatedEntityId,
+          n.UserID as userId
+        FROM Notifications n
+        JOIN NotificationTypes nt ON n.NotificationTypeID = nt.NotificationTypeID
+        WHERE n.NotificationID = @notificationId
+      `);
+    
+    if (notificationResult.recordset.length === 0) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+    
+    const notification = notificationResult.recordset[0];
+    
+    // Get user role for context
+    const userResult = await pool.request()
+      .input('userId', sql.Int, notification.userId)
+      .query(`
+        SELECT Role
+        FROM Resources
+        WHERE ResourceID = @userId
+      `);
+    
+    const userRole = userResult.recordset.length > 0 ? userResult.recordset[0].Role : 'Resource';
+    
+    // Generate AI action suggestion
+    const enhancedNotification = await notificationService.generateActionSuggestion(
+      notification,
+      { userId: notification.userId, role: userRole }
+    );
+    
+    res.json({
+      suggestedAction: enhancedNotification.suggestedAction
+    });
+  } catch (error) {
+    console.error('Error generating action suggestion:', error);
+    res.status(500).json({
+      message: 'Error generating action suggestion',
+      error: process.env.NODE_ENV === 'production' ? {} : error.message
+    });
+  }
+};
+
 module.exports = {
   getUserNotifications,
   getUnreadCount,
@@ -400,5 +489,6 @@ module.exports = {
   getSystemSettings,
   updateSystemSettings,
   triggerWeeklyDigest,
-  processEmailQueue
+  processEmailQueue,
+  getActionSuggestion
 };

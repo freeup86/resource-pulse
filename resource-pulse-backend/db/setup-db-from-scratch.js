@@ -15,7 +15,8 @@ const SCRIPTS_TO_EXECUTE = [
   { name: 'capacity-tables.sql', description: 'Capacity planning tables' },
   { name: 'notification-tables.sql', description: 'Notification system tables' },
   { name: 'financial-tracking.sql', description: 'Financial tracking tables and views' },
-  { name: 'financial-calculations.sql', description: 'Financial calculations stored procedures' }
+  { name: 'financial-calculations.sql', description: 'Financial calculations stored procedures' },
+  { name: 'skills-gap-tables.sql', description: 'Skills gap analysis tables and views' }
 ];
 
 // Add any additional scripts or data seed scripts here if needed
@@ -90,6 +91,17 @@ const setupDatabaseFromScratch = async () => {
           
           if (checkProc.recordset[0].ProcedureExists === 1) {
             console.log(`  Financial calculations procedures already exist, skipping ${script.name}`);
+            continue;
+          }
+        } else if (script.name === 'skills-gap-tables.sql') {
+          const checkTable = await pool.request().query(`
+            SELECT CASE WHEN EXISTS (
+              SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'market_skill_trends'
+            ) THEN 1 ELSE 0 END AS TableExists
+          `);
+          
+          if (checkTable.recordset[0].TableExists === 1) {
+            console.log(`  Skills gap tables already exist, skipping ${script.name}`);
             continue;
           }
         }

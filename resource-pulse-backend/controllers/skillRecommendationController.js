@@ -185,7 +185,63 @@ const getProjectSkillRecommendations = async (req, res) => {
   }
 };
 
+/**
+ * Delete a skill recommendation
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const deleteSkillRecommendation = async (req, res) => {
+  try {
+    const { recommendationId } = req.params;
+    
+    if (!recommendationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Recommendation ID is required'
+      });
+    }
+    
+    const pool = await poolPromise;
+    
+    // Check if recommendation exists
+    const recommendationCheck = await pool.request()
+      .input('recommendationId', sql.Int, recommendationId)
+      .query('SELECT RecommendationID, ProjectID FROM SkillRecommendations WHERE RecommendationID = @recommendationId');
+    
+    if (recommendationCheck.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Recommendation not found'
+      });
+    }
+    
+    const projectId = recommendationCheck.recordset[0].ProjectID;
+    
+    // Delete the recommendation
+    await pool.request()
+      .input('recommendationId', sql.Int, recommendationId)
+      .query('DELETE FROM SkillRecommendations WHERE RecommendationID = @recommendationId');
+    
+    res.json({
+      success: true,
+      message: 'Skill recommendation deleted successfully',
+      data: {
+        recommendationId: parseInt(recommendationId),
+        projectId
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting skill recommendation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting skill recommendation',
+      error: process.env.NODE_ENV === 'production' ? {} : error.message
+    });
+  }
+};
+
 module.exports = {
   addSkillRecommendation,
-  getProjectSkillRecommendations
+  getProjectSkillRecommendations,
+  deleteSkillRecommendation
 };

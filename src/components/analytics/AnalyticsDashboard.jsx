@@ -7,6 +7,8 @@ import UtilizationSummary from './UtilizationSummary';
 import ResourceAllocationChart from './ResourceAllocationChart';
 import SkillsAnalysisChart from './SkillsAnalysisChart';
 import SkillsGapAnalysisChart from './SkillsGapAnalysisChart';
+import TrainingRecommendationsTable from './TrainingRecommendationsTable';
+import HiringRecommendationsTable from './HiringRecommendationsTable';
 import ProjectAllocationChart from './ProjectAllocationChart';
 import AvailabilityForecast from './AvailabilityForecast';
 import LoadingSpinner from '../common/LoadingSpinner';
@@ -191,6 +193,12 @@ const AnalyticsDashboard = () => {
             </div>
             <div className="grid grid-cols-1 gap-6 mb-6">
               <SkillsAnalysisChart resources={displayResources} projects={displayProjects} />
+            </div>
+            <div className="grid grid-cols-1 gap-6 mb-6">
+              <TrainingRecommendationsTable />
+            </div>
+            <div className="grid grid-cols-1 gap-6 mb-6">
+              <HiringRecommendationsTable />
             </div>
           </div>
         </>

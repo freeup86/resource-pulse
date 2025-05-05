@@ -21,6 +21,17 @@ import CapacityPlanningPage from './components/capacity/CapacityPlanningPage';
 import NotificationsListPage from './components/notifications/NotificationsListPage';
 import NotificationPage from './components/notifications/NotificationPage';
 import NotificationSettingsPage from './components/notifications/NotificationSettingsPage';
+
+// AI Feature Components
+import UtilizationForecastPage from './components/ai-features/forecast/UtilizationForecastPage';
+import ProjectRiskPage from './components/ai-features/risk/ProjectRiskPage';
+import NaturalLanguageSearchPage from './components/ai-features/search/NaturalLanguageSearchPage';
+import FinancialOptimizationPage from './components/ai-features/finance/FinancialOptimizationPage';
+import DataFixTest from './components/ai-features/finance/DataFixTest';
+import SkillsGapPage from './components/ai-features/skills-gap/SkillsGapPage';
+import DocumentProcessingPage from './components/ai-features/document-processor/DocumentProcessingPage';
+import ClientSatisfactionPage from './components/ai-features/satisfaction/ClientSatisfactionPage';
+
 import './App.css';
 
 function App() {
@@ -49,6 +60,16 @@ function App() {
               <Route path="/notifications/settings" element={<NotificationSettingsPage />} />
               <Route path="/notifications/:id" element={<NotificationPage />} />
               <Route path="/notifications" element={<NotificationsListPage />} />
+              
+              {/* AI Features Routes */}
+              <Route path="/ai/forecast" element={<UtilizationForecastPage />} />
+              <Route path="/ai/risk" element={<ProjectRiskPage />} />
+              <Route path="/ai/search" element={<NaturalLanguageSearchPage />} />
+              <Route path="/ai/finance" element={<FinancialOptimizationPage />} />
+              <Route path="/ai/finance/test" element={<DataFixTest />} />
+              <Route path="/ai/skills" element={<SkillsGapPage />} />
+              <Route path="/ai/documents" element={<DocumentProcessingPage />} />
+              <Route path="/ai/satisfaction" element={<ClientSatisfactionPage />} />
             </Routes>
           </MainLayout>
         </Router>
