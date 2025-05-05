@@ -102,30 +102,23 @@ const getUnreadCount = async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Safer error handling for deployment
-    try {
-      const pool = await poolPromise;
-      
-      const result = await pool.request()
-        .input('userId', sql.Int, userId)
-        .query(`
-          SELECT COUNT(*) as count
-          FROM Notifications
-          WHERE UserID = @userId AND IsRead = 0
-        `);
-      
-      // If we get here, we have actual data
-      res.json({ count: result.recordset[0].count });
-    } catch (dbError) {
-      // If database query fails, return 0 count
-      console.warn('Database error in getUnreadCount, using fallback data:', dbError.message);
-      res.json({ count: 0 });
-    }
+    const pool = await poolPromise;
+    
+    const result = await pool.request()
+      .input('userId', sql.Int, userId)
+      .query(`
+        SELECT COUNT(*) as count
+        FROM Notifications
+        WHERE UserID = @userId AND IsRead = 0
+      `);
+    
+    res.json({ count: result.recordset[0].count });
   } catch (error) {
     console.error('Error getting unread count:', error);
-    // In case of any other error, return 0 count with 200 status
-    // This prevents frontend crashes but logs the error
-    res.json({ count: 0 });
+    res.status(500).json({
+      message: 'Error retrieving unread count',
+      error: process.env.NODE_ENV === 'production' ? 'Database error' : error.message
+    });
   }
 };
 

@@ -13,6 +13,7 @@ services:
   - type: web
     name: resource-pulse-backend
     env: node
+    plan: free # or choose appropriate plan based on your needs
     buildCommand: cd resource-pulse-backend && npm install
     startCommand: cd resource-pulse-backend && node server.js
     envVars:
@@ -20,4 +21,17 @@ services:
         value: production
       - key: PORT
         value: 8000
+      # Database configuration - these need to be set in the Render dashboard
+      - key: DB_USER
+        sync: false # This means you'll set it in the dashboard
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SERVER
+        sync: false
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_ENCRYPT
+        value: "true" # For Azure SQL Database
+      - key: DB_TRUST_CERT
+        value: "false" # For production
     healthCheckPath: /api
