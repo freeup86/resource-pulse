@@ -9,11 +9,54 @@ const createMockPool = () => {
   const createMockRequest = () => {
     const request = {
       input: function(name, type, value) {
+        // Store inputs for potential use in query
+        this._inputs = this._inputs || {};
+        this._inputs[name] = value;
         return this;
       },
       query: async function(query) {
         console.log('Mock DB query:', query.substring(0, 50) + (query.length > 50 ? '...' : ''));
-        // Return empty recordset for any query
+        
+        // Mock responses for specific queries
+        if (query.includes('COUNT(*) as count') && query.includes('Notifications')) {
+          return { 
+            recordset: [{ count: 0 }],
+            rowsAffected: [1]
+          };
+        }
+        
+        if (query.includes('COUNT(*) as total') && query.includes('Notifications')) {
+          return { 
+            recordset: [{ total: 0 }],
+            rowsAffected: [1]
+          };
+        }
+        
+        if (query.includes('NotificationTypes')) {
+          return {
+            recordset: [
+              { 
+                typeId: 1, 
+                type: 'allocation_created', 
+                description: 'New allocation', 
+                isEmailEnabled: true,
+                isInAppEnabled: true,
+                frequency: 'immediate'
+              },
+              { 
+                typeId: 2, 
+                type: 'deadline_approaching', 
+                description: 'Allocation deadline approaching', 
+                isEmailEnabled: true,
+                isInAppEnabled: true,
+                frequency: 'immediate'
+              }
+            ],
+            rowsAffected: [2]
+          };
+        }
+        
+        // Default empty response
         return { 
           recordset: [],
           rowsAffected: [0]
