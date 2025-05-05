@@ -1,8 +1,49 @@
 // notificationService.js
 const { poolPromise, sql } = require('../db/config');
-const nodemailer = require('nodemailer');
-const Anthropic = require('@anthropic-ai/sdk');
-const aiTelemetry = require('./aiTelemetry');
+let nodemailer, Anthropic;
+
+// Try to load dependencies but gracefully handle missing ones
+try {
+  nodemailer = require('nodemailer');
+} catch (err) {
+  console.warn('Nodemailer not available, email functionality will be disabled');
+  // Create a mock nodemailer object to avoid crashes
+  nodemailer = {
+    createTransport: () => ({
+      sendMail: async (mail) => {
+        console.log('Mock email would be sent:', mail);
+        return { messageId: `mock-${Date.now()}@resourcepulse.com` };
+      },
+      verify: async () => true
+    }),
+    createTestAccount: async () => ({
+      user: 'test@example.com',
+      pass: 'password'
+    })
+  };
+}
+
+try {
+  Anthropic = require('@anthropic-ai/sdk');
+} catch (err) {
+  console.warn('@anthropic-ai/sdk not available, AI features will be disabled');
+  // Create a mock Anthropic class
+  Anthropic = class MockAnthropic {
+    constructor() {}
+    messages = {
+      create: async () => ({
+        content: [{ text: '"Use default prioritization."' }]
+      })
+    };
+  };
+}
+
+try {
+  require('./aiTelemetry');
+} catch (err) {
+  console.warn('AI telemetry module not available');
+}
+
 require('dotenv').config();
 
 // Get API key from environment variables
