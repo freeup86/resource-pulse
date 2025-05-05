@@ -45,45 +45,65 @@ const Dashboard = () => {
       
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <Link to="/resources" className="block bg-white rounded-lg shadow overflow-hidden hover:shadow-md hover:bg-blue-50 transition-all cursor-pointer">
           <div className="h-2 bg-blue-500"></div>
           <div className="p-4">
-            <h3 className="text-lg font-medium text-gray-700">Total Resources</h3>
+            <h3 className="text-lg font-medium text-gray-700 flex items-center">
+              <Users className="h-5 w-5 mr-2 text-blue-500" /> 
+              Total Resources
+            </h3>
             <p className="text-3xl font-bold mt-2">{totalResources}</p>
+            <span className="text-xs text-blue-500 mt-2 block">Click to view all resources →</span>
           </div>
-        </div>
+        </Link>
         
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <Link to="/allocations" className="block bg-white rounded-lg shadow overflow-hidden hover:shadow-md hover:bg-green-50 transition-all cursor-pointer">
           <div className="h-2 bg-green-500"></div>
           <div className="p-4">
-            <h3 className="text-lg font-medium text-gray-700">Allocated</h3>
+            <h3 className="text-lg font-medium text-gray-700 flex items-center">
+              <Briefcase className="h-5 w-5 mr-2 text-green-500" /> 
+              Allocated
+            </h3>
             <p className="text-3xl font-bold mt-2">{allocatedResources}</p>
+            <span className="text-xs text-green-500 mt-2 block">View allocations →</span>
           </div>
-        </div>
+        </Link>
         
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <Link to="/resources" state={{ filter: 'unallocated' }} className="block bg-white rounded-lg shadow overflow-hidden hover:shadow-md hover:bg-gray-50 transition-all cursor-pointer">
           <div className="h-2 bg-gray-500"></div>
           <div className="p-4">
-            <h3 className="text-lg font-medium text-gray-700">Available</h3>
+            <h3 className="text-lg font-medium text-gray-700 flex items-center">
+              <Users className="h-5 w-5 mr-2 text-gray-500" /> 
+              Available
+            </h3>
             <p className="text-3xl font-bold mt-2">{availableResources}</p>
+            <span className="text-xs text-gray-500 mt-2 block">View available resources →</span>
           </div>
-        </div>
+        </Link>
         
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <Link to="/ending-soon" className="block bg-white rounded-lg shadow overflow-hidden hover:shadow-md hover:bg-yellow-50 transition-all cursor-pointer">
           <div className="h-2 bg-yellow-500"></div>
           <div className="p-4">
-            <h3 className="text-lg font-medium text-gray-700">Ending Soon</h3>
+            <h3 className="text-lg font-medium text-gray-700 flex items-center">
+              <Calendar className="h-5 w-5 mr-2 text-yellow-500" /> 
+              Ending Soon
+            </h3>
             <p className="text-3xl font-bold mt-2">{endingSoonCount}</p>
+            <span className="text-xs text-yellow-500 mt-2 block">View ending allocations →</span>
           </div>
-        </div>
+        </Link>
         
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <Link to="/projects" className="block bg-white rounded-lg shadow overflow-hidden hover:shadow-md hover:bg-purple-50 transition-all cursor-pointer">
           <div className="h-2 bg-purple-500"></div>
           <div className="p-4">
-            <h3 className="text-lg font-medium text-gray-700">Total Projects</h3>
+            <h3 className="text-lg font-medium text-gray-700 flex items-center">
+              <Briefcase className="h-5 w-5 mr-2 text-purple-500" /> 
+              Total Projects
+            </h3>
             <p className="text-3xl font-bold mt-2">{totalProjects}</p>
+            <span className="text-xs text-purple-500 mt-2 block">View all projects →</span>
           </div>
-        </div>
+        </Link>
       </div>
       
       {/* Analytics */}

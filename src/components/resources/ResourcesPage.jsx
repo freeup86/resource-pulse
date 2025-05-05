@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import TabNav from '../layout/TabNav';
 import ResourcesList from './ResourcesList';
 import ResourceForm from './ResourceForm';
@@ -7,10 +8,18 @@ import { useResources } from '../../contexts/ResourceContext';
 
 const ResourcesPage = () => {
   const { resources } = useResources();
+  const location = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [selectedResource, setSelectedResource] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  
+  // Check for filter in location state (for dashboard navigation)
+  useEffect(() => {
+    if (location.state?.filter === 'unallocated') {
+      setStatusFilter('available');
+    }
+  }, [location.state]);
   
   const handleAddNew = () => {
     setSelectedResource(null);
