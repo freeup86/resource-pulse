@@ -92,24 +92,47 @@ app.use('/api/documents', documentProcessingRoutes);  // Document processing rou
 app.use('/api/satisfaction', clientSatisfactionRoutes);  // Client satisfaction prediction routes
 
 // Initialize system settings before starting server
-settingsController.initializeSettings();
+try {
+  settingsController.initializeSettings();
+} catch (err) {
+  console.error('Error initializing settings:', err.message);
+}
 
 // Initialize notification service
-notificationService.initializeService().then(success => {
-  if (success) {
-    console.log('Notification service initialized successfully');
-  } else {
-    console.error('Failed to initialize notification service');
-  }
-});
+try {
+  notificationService.initializeService().then(success => {
+    if (success) {
+      console.log('Notification service initialized successfully');
+    } else {
+      console.error('Failed to initialize notification service');
+    }
+  }).catch(err => {
+    console.error('Error in notification service:', err.message);
+  });
+} catch (err) {
+  console.error('Failed to initialize notification service:', err.message);
+}
 
 // Start scheduled jobs in production mode
 if (process.env.NODE_ENV === 'production') {
-  scheduledSyncService.initializeJobs();
-  notificationScheduler.initializeScheduledJobs();
+  try {
+    scheduledSyncService.initializeJobs();
+  } catch (err) {
+    console.error('Error initializing sync jobs:', err.message);
+  }
+  
+  try {
+    notificationScheduler.initializeScheduledJobs();
+  } catch (err) {
+    console.error('Error initializing notification jobs:', err.message);
+  }
 } else {
   // In development, still initialize notification jobs but with console logs
-  notificationScheduler.initializeScheduledJobs();
+  try {
+    notificationScheduler.initializeScheduledJobs();
+  } catch (err) {
+    console.error('Error initializing notification jobs:', err.message);
+  }
 }
 
 // Error handler

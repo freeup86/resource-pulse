@@ -3,8 +3,11 @@ services:
     name: resource-pulse
     env: docker
     dockerfilePath: ./Dockerfile
-    buildCommand: npm install && npm run build
-    # No start command needed for Docker
+    plan: free # or specify your plan
     envVars:
-      - key: NODE_VERSION
-        value: 18
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8000
+    healthCheckPath: /
+    # No build command needed as it's in the Dockerfile

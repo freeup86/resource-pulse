@@ -1,7 +1,9 @@
 import axios from 'axios';
 
-// Use environment variable if available, otherwise use relative path or mock API
-const API_URL = process.env.REACT_APP_API_URL || '/api';
+// When using the same host for frontend and backend in production (like Render)
+// we use the relative path. In development, use localhost:8000
+const isDevelopment = process.env.NODE_ENV === 'development';
+const API_URL = isDevelopment ? 'http://localhost:8000/api' : '/api';
 
 const api = axios.create({
   baseURL: API_URL,
