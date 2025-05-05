@@ -75,7 +75,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/capacity', capacityRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ai', aiRecommendationRoutes);  // AI recommendation routes
-app.use('/api', skillRecommendationRoutes);  // Skill recommendation routes
+app.use('/api/skill-recommendations', skillRecommendationRoutes);  // Skill recommendation routes
 app.use('/api/telemetry', telemetryRoutes);  // Telemetry and monitoring routes
 app.use('/api/matching', matchingRoutes);  // AI-powered resource-project matching routes
 app.use('/api/forecast', forecastRoutes);  // Advanced AI forecast routes (replaces older routes)
