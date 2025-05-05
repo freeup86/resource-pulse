@@ -4,6 +4,8 @@ services:
     env: static
     buildCommand: npm install && npm run build
     staticPublishPath: ./build
+    # Don't run start command for static sites
+    startCommand: ""
     envVars:
       - key: NODE_VERSION
         value: 18
