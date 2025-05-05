@@ -1,11 +1,10 @@
 services:
   - type: web
     name: resource-pulse
-    env: static
+    env: docker
+    dockerfilePath: ./Dockerfile
     buildCommand: npm install && npm run build
-    staticPublishPath: ./build
-    # Don't run start command for static sites
-    startCommand: ""
+    # No start command needed for Docker
     envVars:
       - key: NODE_VERSION
         value: 18
