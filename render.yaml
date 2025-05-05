@@ -1,13 +1,23 @@
 services:
+  # Frontend React application
   - type: web
     name: resource-pulse
-    env: docker
-    dockerfilePath: ./Dockerfile
-    plan: free # or specify your plan
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://resource-pulse-backend.onrender.com/api
+  
+  # Backend Node.js service
+  - type: web
+    name: resource-pulse-backend
+    env: node
+    buildCommand: cd resource-pulse-backend && npm install
+    startCommand: cd resource-pulse-backend && node server.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 8000
-    healthCheckPath: /
-    # No build command needed as it's in the Dockerfile
+    healthCheckPath: /api

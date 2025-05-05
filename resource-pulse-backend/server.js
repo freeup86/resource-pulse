@@ -38,8 +38,15 @@ dotenv.config();
 // Create Express app
 const app = express();
 
-// CORS middleware - simplest configuration that allows all origins
-app.use(cors());
+// Set up CORS middleware with more specific configuration
+const corsOptions = {
+  origin: ['https://resource-pulse.onrender.com', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 
 // Other middleware
 app.use(helmet({
@@ -48,19 +55,8 @@ app.use(helmet({
 app.use(morgan('dev')); // Logging
 app.use(express.json()); // Parse JSON bodies
 
-// Add CORS headers directly to all responses
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  next();
-});
+// For preflight requests
+app.options('*', cors(corsOptions));
 
 // Base route
 app.get('/', (req, res) => {

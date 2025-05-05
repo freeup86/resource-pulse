@@ -1,15 +1,18 @@
 import axios from 'axios';
 
-// When using the same host for frontend and backend in production (like Render)
-// we use the relative path. In development, use localhost:8000
-const isDevelopment = process.env.NODE_ENV === 'development';
-const API_URL = isDevelopment ? 'http://localhost:8000/api' : '/api';
+// In production, use the configured backend URL
+// This will be the URL of your backend service on Render
+const API_URL = process.env.REACT_APP_API_URL || 'https://resource-pulse-backend.onrender.com/api';
+
+console.log('Using API URL:', API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  // Ensure cookies are sent with requests for any authentication needs
+  withCredentials: true
 });
 
 // Add response interceptor to handle common errors
