@@ -24,3 +24,4 @@ yarn-error.log*
 
 **/.claude/settings.local.json
 resource-pulse-backend/.env
+resource-pulse-backend/.env
