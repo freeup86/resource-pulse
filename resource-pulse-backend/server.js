@@ -4,10 +4,9 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
 
-// Apply monkey patch to fix path-to-regexp errors
+// Apply patch to fix path-to-regexp errors
 // This must be done before any routes are registered or required
-const applyPathToRegexpPatch = require('./monkey-patch');
-applyPathToRegexpPatch();
+require('./patch-path-to-regexp');
 
 // Import routes
 const resourceRoutes = require('./routes/resourceRoutes');
