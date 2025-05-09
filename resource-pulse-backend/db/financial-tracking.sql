@@ -95,7 +95,6 @@ CREATE TABLE BudgetItems (
     Description NVARCHAR(500) NOT NULL,
     PlannedAmount DECIMAL(14, 2) NOT NULL,
     ActualAmount DECIMAL(14, 2) NULL,
-    Variance DECIMAL(14, 2) NULL,
     Notes NVARCHAR(MAX) NULL,
     FOREIGN KEY (ProjectID) REFERENCES Projects(ProjectID) ON DELETE CASCADE
 );

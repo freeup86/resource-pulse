@@ -37,7 +37,19 @@ const notificationService = require('./services/notificationService');
 const notificationScheduler = require('./services/notificationScheduler');
 
 // Load environment variables
-dotenv.config();
+if (process.env.NODE_ENV === 'development') {
+  // Load development variables from .env.development if exists
+  dotenv.config({ path: './.env.development' });
+} else {
+  // Load regular .env file for other environments
+  dotenv.config();
+}
+
+// Set mock data flag if not already set
+if (process.env.USE_MOCK_DATA === undefined) {
+  // Default to true in development, false in production
+  process.env.USE_MOCK_DATA = process.env.NODE_ENV === 'development' ? 'true' : 'false';
+}
 
 // Route validation to catch path-to-regexp errors
 const validateRoutes = (router) => {

@@ -1,4 +1,5 @@
 const { poolPromise, sql } = require('../db/config');
+const { shouldUseMock, projectService } = require('../mockDataService');
 // Check if Roles table exists and create it if it doesn't
 const ensureRolesTable = async () => {
   try {
@@ -74,6 +75,14 @@ ensureRolesTable();
 // Get all projects
 exports.getAllProjects = async (req, res) => {
   try {
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for getAllProjects');
+      const mockProjects = await projectService.getAllProjects();
+      return res.json(mockProjects);
+    }
+
+    // Proceed with regular database operations
     const pool = await poolPromise;
     console.log('Backend: Getting all projects');
     
@@ -293,13 +302,13 @@ exports.getProjectById = async (req, res) => {
     const budgetItemsResult = await pool.request()
       .input('projectId', sql.Int, id)
       .query(`
-        SELECT 
+        SELECT
           BudgetItemID,
           Category,
           Description,
           PlannedAmount,
           ActualAmount,
-          Variance,
+          COALESCE(PlannedAmount, 0) - COALESCE(ActualAmount, 0) AS Variance,
           Notes
         FROM BudgetItems
         WHERE ProjectID = @projectId
@@ -402,6 +411,14 @@ exports.getProjectById = async (req, res) => {
 // Create a new project
 exports.createProject = async (req, res) => {
   try {
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for project creation');
+      const mockProject = await projectService.createProject(req.body);
+      return res.status(201).json(mockProject);
+    }
+
+    // Proceed with regular database operations
     const pool = await poolPromise;
     const { 
       name, 
@@ -649,13 +666,13 @@ exports.createProject = async (req, res) => {
       const budgetItemsResult = await pool.request()
         .input('projectId', sql.Int, projectId)
         .query(`
-          SELECT 
+          SELECT
             BudgetItemID,
             Category,
             Description,
             PlannedAmount,
             ActualAmount,
-            Variance,
+            COALESCE(PlannedAmount, 0) - COALESCE(ActualAmount, 0) AS Variance,
             Notes
           FROM BudgetItems
           WHERE ProjectID = @projectId
@@ -758,9 +775,22 @@ exports.createProject = async (req, res) => {
     }
   } catch (err) {
     console.error('Error creating project:', err);
+    // Log more details about the request for debugging
+    console.error('Request body:', JSON.stringify(req.body));
+    console.error('Error details:', err.message);
+    if (err.stack) {
+      console.error('Error stack:', err.stack);
+    }
+
+    // Send a more detailed response to the client
     res.status(500).json({
       message: 'Error creating project',
-      error: process.env.NODE_ENV === 'production' ? {} : err
+      errorMessage: err.message,
+      error: process.env.NODE_ENV === 'production' ? {} : {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      }
     });
   }
 };
@@ -1129,13 +1159,13 @@ exports.updateProject = async (req, res) => {
       const budgetItemsResult = await pool.request()
         .input('projectId', sql.Int, id)
         .query(`
-          SELECT 
+          SELECT
             BudgetItemID,
             Category,
             Description,
             PlannedAmount,
             ActualAmount,
-            Variance,
+            COALESCE(PlannedAmount, 0) - COALESCE(ActualAmount, 0) AS Variance,
             Notes
           FROM BudgetItems
           WHERE ProjectID = @projectId

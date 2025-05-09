@@ -1,5 +1,6 @@
 // allocationController.js
 const { poolPromise, sql } = require('../db/config');
+const { shouldUseMock, allocationService } = require('../mockDataService');
 
 // Helper function to get the maximum utilization percentage from settings
 const getMaxUtilizationPercentage = async (pool) => {
@@ -25,10 +26,10 @@ const getMaxUtilizationPercentage = async (pool) => {
 const updateAllocation = async (req, res) => {
   try {
     const { resourceId } = req.params;
-    const { 
-      projectId, 
-      startDate, 
-      endDate, 
+    const {
+      projectId,
+      startDate,
+      endDate,
       utilization,
       // Financial parameters
       hourlyRate,
@@ -37,6 +38,38 @@ const updateAllocation = async (req, res) => {
       isBillable,
       billingType
     } = req.body;
+
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for allocation creation/update');
+      try {
+        const allocationData = {
+          resourceId: parseInt(resourceId),
+          projectId: parseInt(projectId),
+          startDate,
+          endDate,
+          utilization,
+          hourlyRate,
+          billableRate,
+          isBillable,
+          totalHours,
+          billingType,
+          notes: req.body.notes
+        };
+
+        const result = await allocationService.createAllocation(allocationData);
+        return res.json(result);
+      } catch (error) {
+        if (error.message.includes('Resource not found')) {
+          return res.status(404).json({ message: 'Resource not found' });
+        } else if (error.message.includes('Project not found')) {
+          return res.status(404).json({ message: 'Project not found' });
+        } else if (error.message.includes('utilization')) {
+          return res.status(400).json({ message: error.message });
+        }
+        throw error;
+      }
+    }
     
     // Validate input parameters
     if (!resourceId) {
@@ -337,6 +370,77 @@ const updateAllocation = async (req, res) => {
 const getResourceAllocations = async (req, res) => {
   try {
     const { resourceId } = req.params;
+
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for getResourceAllocations');
+      try {
+        const mockAllocations = await allocationService.getAllAllocations();
+        const resourceAllocations = mockAllocations.filter(a =>
+          a.resource && a.resource.id === parseInt(resourceId)
+        );
+
+        // If resourceId exists in our mock data, return formatted data
+        if (resourceAllocations.length > 0) {
+          // Get resource details from first allocation
+          const resource = resourceAllocations[0].resource;
+
+          return res.json({
+            resource: {
+              id: resource.id,
+              name: resource.name,
+              role: resource.role,
+              hourlyRate: resourceAllocations[0].hourlyRate || 0,
+              billableRate: resourceAllocations[0].billableRate || 0,
+              currency: 'USD'
+            },
+            allocations: resourceAllocations,
+            financialSummary: {
+              totalAllocatedHours: resourceAllocations.reduce((sum, a) => sum + (a.totalHours || 0), 0),
+              totalCost: resourceAllocations.reduce((sum, a) => sum + (a.totalCost || 0), 0),
+              totalBillableAmount: resourceAllocations.reduce((sum, a) => sum + (a.billableAmount || 0), 0),
+              avgBillableRate: resourceAllocations.length ? resourceAllocations.reduce((sum, a) => sum + (a.billableRate || 0), 0) / resourceAllocations.length : 0,
+              currentBillableUtilization: resourceAllocations.filter(a => a.isBillable).reduce((sum, a) => sum + (a.utilization || 0), 0),
+              totalProfit: resourceAllocations.reduce((sum, a) => sum + ((a.billableAmount || 0) - (a.totalCost || 0)), 0)
+            }
+          });
+        }
+
+        // If resource exists but has no allocations, try to get resource details
+        try {
+          const resourceService = require('../mockDataService').resourceService;
+          const mockResource = await resourceService.getResourceById(resourceId);
+
+          return res.json({
+            resource: {
+              id: mockResource.id,
+              name: mockResource.name,
+              role: mockResource.role,
+              hourlyRate: mockResource.costRate || 0,
+              billableRate: mockResource.costRate ? mockResource.costRate * 2 : 0,
+              currency: 'USD'
+            },
+            allocations: [],
+            financialSummary: {
+              totalAllocatedHours: 0,
+              totalCost: 0,
+              totalBillableAmount: 0,
+              avgBillableRate: 0,
+              currentBillableUtilization: 0,
+              totalProfit: 0
+            }
+          });
+        } catch (e) {
+          return res.status(404).json({ message: 'Resource not found' });
+        }
+      } catch (error) {
+        if (error.message === 'Resource not found') {
+          return res.status(404).json({ message: 'Resource not found' });
+        }
+        throw error;
+      }
+    }
+
     const pool = await poolPromise;
     
     // Check if resource exists
@@ -479,8 +583,20 @@ const getResourceAllocations = async (req, res) => {
 // Get resources ending soon
 const getResourcesEndingSoon = async (req, res) => {
   try {
-    const pool = await poolPromise;
     const daysThreshold = req.query.days ? parseInt(req.query.days) : 14;
+
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for getResourcesEndingSoon');
+      try {
+        const resourcesEndingSoon = await allocationService.getAllocationsEndingSoon(daysThreshold);
+        return res.json(resourcesEndingSoon);
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    const pool = await poolPromise;
     
     // Calculate the date threshold
     const today = new Date();
@@ -599,6 +715,42 @@ const getResourceMatches = async (req, res) => {
 const removeAllocation = async (req, res) => {
   try {
     const { resourceId, allocationId } = req.body;
+
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for removeAllocation');
+      try {
+        const result = await allocationService.deleteAllocation(allocationId);
+
+        // Get updated allocations for response
+        const mockAllocations = await allocationService.getAllAllocations();
+        const remainingAllocations = mockAllocations.filter(a =>
+          a.resource && a.resource.id === parseInt(resourceId)
+        );
+
+        // Format financials summary
+        const financialSummary = {
+          totalAllocatedHours: remainingAllocations.reduce((sum, a) => sum + (a.totalHours || 0), 0),
+          totalCost: remainingAllocations.reduce((sum, a) => sum + (a.totalCost || 0), 0),
+          totalBillableAmount: remainingAllocations.reduce((sum, a) => sum + (a.billableAmount || 0), 0),
+          totalProfit: remainingAllocations.reduce((sum, a) => sum + ((a.billableAmount || 0) - (a.totalCost || 0)), 0)
+        };
+
+        return res.json({
+          message: result.message,
+          deletedCount: 1,
+          remainingAllocations,
+          financialSummary
+        });
+      } catch (error) {
+        if (error.message === 'Allocation not found') {
+          return res.status(404).json({ message: 'Allocation not found' });
+        } else if (error.message === 'Resource not found') {
+          return res.status(404).json({ message: 'Resource not found' });
+        }
+        throw error;
+      }
+    }
     
     // Validate required fields
     if (!resourceId) {
