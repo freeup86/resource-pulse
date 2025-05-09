@@ -1,8 +1,16 @@
 const { poolPromise, sql } = require('../db/config');
+const { shouldUseMock, resourceService } = require('../mockDataService');
 
 // Get all resources
 exports.getAllResources = async (req, res) => {
   try {
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for getAllResources');
+      const mockResources = await resourceService.getAllResources();
+      return res.json(mockResources);
+    }
+
     const pool = await poolPromise;
     
     // Query resources with financial info
@@ -127,8 +135,23 @@ exports.getAllResources = async (req, res) => {
 // Get a single resource by ID
 exports.getResourceById = async (req, res) => {
   try {
-    const pool = await poolPromise;
     const { id } = req.params;
+
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for getResourceById');
+      try {
+        const mockResource = await resourceService.getResourceById(id);
+        return res.json(mockResource);
+      } catch (error) {
+        if (error.message === 'Resource not found') {
+          return res.status(404).json({ message: 'Resource not found' });
+        }
+        throw error;
+      }
+    }
+
+    const pool = await poolPromise;
     
     // Query resource with financial info
     const result = await pool.request()
@@ -318,6 +341,13 @@ exports.getResourceById = async (req, res) => {
 // Create a new resource
 exports.createResource = async (req, res) => {
   try {
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for createResource');
+      const mockResource = await resourceService.createResource(req.body);
+      return res.status(201).json(mockResource);
+    }
+
     const pool = await poolPromise;
     const { 
       name, 
@@ -492,8 +522,23 @@ exports.createResource = async (req, res) => {
 // Update a resource
 exports.updateResource = async (req, res) => {
   try {
-    const pool = await poolPromise;
     const { id } = req.params;
+
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for updateResource');
+      try {
+        const mockResource = await resourceService.updateResource(id, req.body);
+        return res.json(mockResource);
+      } catch (error) {
+        if (error.message === 'Resource not found') {
+          return res.status(404).json({ message: 'Resource not found' });
+        }
+        throw error;
+      }
+    }
+
+    const pool = await poolPromise;
     const { 
       name, 
       roleId, 
@@ -775,8 +820,25 @@ exports.updateResource = async (req, res) => {
 // Delete a resource
 exports.deleteResource = async (req, res) => {
   try {
-    const pool = await poolPromise;
     const { id } = req.params;
+
+    // If database connection is not available, use mock data
+    if (shouldUseMock()) {
+      console.log('Using mock data service for deleteResource');
+      try {
+        const result = await resourceService.deleteResource(id);
+        return res.json(result);
+      } catch (error) {
+        if (error.message === 'Resource not found') {
+          return res.status(404).json({ message: 'Resource not found' });
+        } else if (error.message.includes('allocations')) {
+          return res.status(400).json({ message: error.message });
+        }
+        throw error;
+      }
+    }
+
+    const pool = await poolPromise;
     
     // Check if resource exists
     const checkResource = await pool.request()

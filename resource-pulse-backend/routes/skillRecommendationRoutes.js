@@ -8,8 +8,8 @@ const {
 } = require('../controllers/skillRecommendationController');
 
 // Routes for skill recommendations
-router.get('/projects/:projectId/skill-recommendations', getProjectSkillRecommendations);
-router.post('/projects/:projectId/skill-recommendations', addSkillRecommendation);
-router.delete('/skill-recommendations/:recommendationId', deleteSkillRecommendation);
+router.get('/projects/:projectId', getProjectSkillRecommendations);
+router.post('/projects/:projectId', addSkillRecommendation);
+router.delete('/:recommendationId', deleteSkillRecommendation);
 
 module.exports = router;

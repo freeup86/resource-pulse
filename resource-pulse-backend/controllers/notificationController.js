@@ -117,7 +117,7 @@ const getUnreadCount = async (req, res) => {
     console.error('Error getting unread count:', error);
     res.status(500).json({
       message: 'Error retrieving unread count',
-      error: process.env.NODE_ENV === 'production' ? {} : error.message
+      error: process.env.NODE_ENV === 'production' ? 'Database error' : error.message
     });
   }
 };

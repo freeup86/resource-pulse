@@ -4,6 +4,10 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
 
+// Apply patch to fix path-to-regexp errors
+// This must be done before any routes are registered or required
+require('./patch-path-to-regexp');
+
 // Import routes
 const resourceRoutes = require('./routes/resourceRoutes');
 const projectRoutes = require('./routes/projectRoutes');
@@ -33,13 +37,153 @@ const notificationService = require('./services/notificationService');
 const notificationScheduler = require('./services/notificationScheduler');
 
 // Load environment variables
-dotenv.config();
+if (process.env.NODE_ENV === 'development') {
+  // Load development variables from .env.development if exists
+  dotenv.config({ path: './.env.development' });
+} else {
+  // Load regular .env file for other environments
+  dotenv.config();
+}
+
+// Set mock data flag if not already set
+if (process.env.USE_MOCK_DATA === undefined) {
+  // Default to true in development, false in production
+  process.env.USE_MOCK_DATA = process.env.NODE_ENV === 'development' ? 'true' : 'false';
+}
+
+// Route validation to catch path-to-regexp errors
+const validateRoutes = (router) => {
+  try {
+    // Safe wrapper to validate route patterns before they're used
+    const originalGet = router.get;
+    const originalPost = router.post;
+    const originalPut = router.put;
+    const originalDelete = router.delete;
+
+    // Wrap route methods to validate patterns
+    router.get = function(path, ...handlers) {
+      if (typeof path === 'string' && path.includes('/:')) {
+        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
+          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
+          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
+        }
+      }
+      return originalGet.call(this, path, ...handlers);
+    };
+
+    router.post = function(path, ...handlers) {
+      if (typeof path === 'string' && path.includes('/:')) {
+        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
+          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
+          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
+        }
+      }
+      return originalPost.call(this, path, ...handlers);
+    };
+
+    router.put = function(path, ...handlers) {
+      if (typeof path === 'string' && path.includes('/:')) {
+        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
+          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
+          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
+        }
+      }
+      return originalPut.call(this, path, ...handlers);
+    };
+
+    router.delete = function(path, ...handlers) {
+      if (typeof path === 'string' && path.includes('/:')) {
+        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
+          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
+          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
+        }
+      }
+      return originalDelete.call(this, path, ...handlers);
+    };
+
+    return router;
+  } catch (error) {
+    console.error('Error validating routes:', error);
+    return router;
+  }
+};
 
 // Create Express app
 const app = express();
 
-// CORS middleware - simplest configuration that allows all origins
-app.use(cors());
+// Direct fix for path-to-regexp error - patches express route methods
+function sanitizeRoutePath(path) {
+  if (typeof path === 'string') {
+    // Replace any potential route pattern issues
+    return path
+      .replace(/\/:(\W|$)/g, '/_fixed_param$1')  // Fix empty parameter names
+      .replace(/\/:\//g, '/_fixed_param/');      // Fix parameter followed by slash
+  }
+  return path;
+}
+
+// Patch route methods to sanitize paths
+const originalAppGet = app.get;
+const originalAppPost = app.post;
+const originalAppPut = app.put;
+const originalAppDelete = app.delete;
+
+app.get = function(path, ...handlers) {
+  return originalAppGet.call(this, sanitizeRoutePath(path), ...handlers);
+};
+
+app.post = function(path, ...handlers) {
+  return originalAppPost.call(this, sanitizeRoutePath(path), ...handlers);
+};
+
+app.put = function(path, ...handlers) {
+  return originalAppPut.call(this, sanitizeRoutePath(path), ...handlers);
+};
+
+app.delete = function(path, ...handlers) {
+  return originalAppDelete.call(this, sanitizeRoutePath(path), ...handlers);
+};
+
+// Patch express.Router as well
+const originalRouter = express.Router;
+express.Router = function() {
+  const router = originalRouter.apply(this, arguments);
+  
+  const originalRouterGet = router.get;
+  const originalRouterPost = router.post;
+  const originalRouterPut = router.put;
+  const originalRouterDelete = router.delete;
+  
+  router.get = function(path, ...handlers) {
+    return originalRouterGet.call(this, sanitizeRoutePath(path), ...handlers);
+  };
+  
+  router.post = function(path, ...handlers) {
+    return originalRouterPost.call(this, sanitizeRoutePath(path), ...handlers);
+  };
+  
+  router.put = function(path, ...handlers) {
+    return originalRouterPut.call(this, sanitizeRoutePath(path), ...handlers);
+  };
+  
+  router.delete = function(path, ...handlers) {
+    return originalRouterDelete.call(this, sanitizeRoutePath(path), ...handlers);
+  };
+  
+  return router;
+};
+
+// Note: Router patching is already done above
+
+// Set up CORS middleware with more specific configuration
+const corsOptions = {
+  origin: ['https://resource-pulse.onrender.com', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 
 // Other middleware
 app.use(helmet({
@@ -48,19 +192,8 @@ app.use(helmet({
 app.use(morgan('dev')); // Logging
 app.use(express.json()); // Parse JSON bodies
 
-// Add CORS headers directly to all responses
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  next();
-});
+// For preflight requests
+app.options('*', cors(corsOptions));
 
 // Base route
 app.get('/', (req, res) => {
@@ -79,7 +212,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/capacity', capacityRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ai', aiRecommendationRoutes);  // AI recommendation routes
-app.use('/api', skillRecommendationRoutes);  // Skill recommendation routes
+app.use('/api/skill-recommendations', skillRecommendationRoutes);  // Skill recommendation routes
 app.use('/api/telemetry', telemetryRoutes);  // Telemetry and monitoring routes
 app.use('/api/matching', matchingRoutes);  // AI-powered resource-project matching routes
 app.use('/api/forecast', forecastRoutes);  // Advanced AI forecast routes (replaces older routes)
@@ -92,24 +225,47 @@ app.use('/api/documents', documentProcessingRoutes);  // Document processing rou
 app.use('/api/satisfaction', clientSatisfactionRoutes);  // Client satisfaction prediction routes
 
 // Initialize system settings before starting server
-settingsController.initializeSettings();
+try {
+  settingsController.initializeSettings();
+} catch (err) {
+  console.error('Error initializing settings:', err.message);
+}
 
 // Initialize notification service
-notificationService.initializeService().then(success => {
-  if (success) {
-    console.log('Notification service initialized successfully');
-  } else {
-    console.error('Failed to initialize notification service');
-  }
-});
+try {
+  notificationService.initializeService().then(success => {
+    if (success) {
+      console.log('Notification service initialized successfully');
+    } else {
+      console.error('Failed to initialize notification service');
+    }
+  }).catch(err => {
+    console.error('Error in notification service:', err.message);
+  });
+} catch (err) {
+  console.error('Failed to initialize notification service:', err.message);
+}
 
 // Start scheduled jobs in production mode
 if (process.env.NODE_ENV === 'production') {
-  scheduledSyncService.initializeJobs();
-  notificationScheduler.initializeScheduledJobs();
+  try {
+    scheduledSyncService.initializeJobs();
+  } catch (err) {
+    console.error('Error initializing sync jobs:', err.message);
+  }
+  
+  try {
+    notificationScheduler.initializeScheduledJobs();
+  } catch (err) {
+    console.error('Error initializing notification jobs:', err.message);
+  }
 } else {
   // In development, still initialize notification jobs but with console logs
-  notificationScheduler.initializeScheduledJobs();
+  try {
+    notificationScheduler.initializeScheduledJobs();
+  } catch (err) {
+    console.error('Error initializing notification jobs:', err.message);
+  }
 }
 
 // Error handler

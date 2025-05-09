@@ -107,7 +107,6 @@ const fixControllers = async () => {
             Description NVARCHAR(500) NULL,
             PlannedAmount DECIMAL(14, 2) NOT NULL,
             ActualAmount DECIMAL(14, 2) NULL,
-            Variance DECIMAL(14, 2) NULL,
             Notes NVARCHAR(MAX) NULL,
             CreatedAt DATETIME2 DEFAULT GETDATE(),
             CONSTRAINT FK_BudgetItems_Projects FOREIGN KEY (ProjectID) REFERENCES Projects(ProjectID) ON DELETE CASCADE
