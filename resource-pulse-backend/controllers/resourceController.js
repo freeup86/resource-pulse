@@ -322,6 +322,7 @@ exports.createResource = async (req, res) => {
     const { 
       name, 
       roleId, 
+      role, // Support direct role name
       email, 
       phone, 
       skills, 
@@ -331,9 +332,9 @@ exports.createResource = async (req, res) => {
       costCenter 
     } = req.body;
     
-    // Validate required fields
-    if (!name || !roleId) {
-      return res.status(400).json({ message: 'Name and role are required' });
+    // Validate required fields - only name is required
+    if (!name) {
+      return res.status(400).json({ message: 'Name is required' });
     }
     
     // Start a transaction
@@ -341,10 +342,34 @@ exports.createResource = async (req, res) => {
     await transaction.begin();
     
     try {
+      let roleName = null;
+      let roleIdToUse = null;
+      
+      // If roleId is provided, get the role name
+      if (roleId) {
+        roleIdToUse = roleId;
+        const roleResult = await transaction.request()
+          .input('roleId', sql.Int, roleId)
+          .query(`
+            SELECT Name
+            FROM Roles
+            WHERE RoleID = @roleId
+          `);
+        
+        if (roleResult.recordset.length > 0) {
+          roleName = roleResult.recordset[0].Name;
+        }
+      }
+      // If direct role name is provided but no roleId, use it directly
+      else if (role) {
+        roleName = role;
+      }
+      
       // Insert resource with financial data
       const resourceResult = await transaction.request()
         .input('name', sql.NVarChar, name)
-        .input('roleId', sql.Int, roleId)
+        .input('roleId', sql.Int, roleIdToUse)
+        .input('roleName', sql.NVarChar, roleName)
         .input('email', sql.NVarChar, email || null)
         .input('phone', sql.NVarChar, phone || null)
         .input('hourlyRate', sql.Decimal(10, 2), hourlyRate || null)
@@ -352,37 +377,15 @@ exports.createResource = async (req, res) => {
         .input('currency', sql.NVarChar, currency || 'USD')
         .input('costCenter', sql.NVarChar, costCenter || null)
         .query(`
-          INSERT INTO Resources (Name, RoleID, Email, Phone, HourlyRate, BillableRate, Currency, CostCenter)
+          INSERT INTO Resources (Name, RoleID, Role, Email, Phone, HourlyRate, BillableRate, Currency, CostCenter)
           OUTPUT INSERTED.ResourceID
-          VALUES (@name, @roleId, @email, @phone, @hourlyRate, @billableRate, @currency, @costCenter)
+          VALUES (@name, @roleId, @roleName, @email, @phone, @hourlyRate, @billableRate, @currency, @costCenter)
         `);
       
       const resourceId = resourceResult.recordset[0].ResourceID;
       
-      // Get the role name for the Role column (for backward compatibility)
-      const roleResult = await transaction.request()
-        .input('roleId', sql.Int, roleId)
-        .query(`
-          SELECT Name
-          FROM Roles
-          WHERE RoleID = @roleId
-        `);
-      
-      const roleName = roleResult.recordset[0]?.Name || '';
-      
-      // Update the Role text column to maintain compatibility
-      await transaction.request()
-        .input('resourceId', sql.Int, resourceId)
-        .input('roleName', sql.NVarChar, roleName)
-        .query(`
-          UPDATE Resources
-          SET Role = @roleName
-          WHERE ResourceID = @resourceId
-        `);
-      
       // Process skills as before
       if (skills && skills.length > 0) {
-        // Your existing skill processing code
         for (const skillName of skills) {
           // Check if skill exists
           const skillResult = await transaction.request()
@@ -494,6 +497,7 @@ exports.updateResource = async (req, res) => {
     const { 
       name, 
       roleId, 
+      role, // Support direct role name
       email, 
       phone, 
       skills, 
@@ -503,9 +507,9 @@ exports.updateResource = async (req, res) => {
       costCenter 
     } = req.body;
     
-    // Validate required fields
-    if (!name || !roleId) {
-      return res.status(400).json({ message: 'Name and role are required' });
+    // Validate required fields - only name is required
+    if (!name) {
+      return res.status(400).json({ message: 'Name is required' });
     }
     
     // Start a transaction
@@ -525,44 +529,65 @@ exports.updateResource = async (req, res) => {
         return res.status(404).json({ message: 'Resource not found' });
       }
       
-      // Get the role name for the Role column (for backward compatibility)
-      const roleResult = await transaction.request()
-        .input('roleId', sql.Int, roleId)
-        .query(`
-          SELECT Name
-          FROM Roles
-          WHERE RoleID = @roleId
-        `);
+      let roleName = null;
+      let roleIdToUse = null;
       
-      const roleName = roleResult.recordset[0]?.Name || '';
+      // If roleId is provided, get the role name
+      if (roleId) {
+        roleIdToUse = roleId;
+        const roleResult = await transaction.request()
+          .input('roleId', sql.Int, roleId)
+          .query(`
+            SELECT Name
+            FROM Roles
+            WHERE RoleID = @roleId
+          `);
+        
+        if (roleResult.recordset.length > 0) {
+          roleName = roleResult.recordset[0].Name;
+        }
+      }
+      // If direct role name is provided but no roleId, use it directly
+      else if (role) {
+        roleName = role;
+      }
       
       // Update resource with roleId, role text, and financial data
-      await transaction.request()
+      const updateQuery = `
+        UPDATE Resources
+        SET Name = @name,
+            ${roleIdToUse !== null ? 'RoleID = @roleId,' : ''}
+            ${roleName !== null ? 'Role = @roleName,' : ''}
+            Email = @email,
+            Phone = @phone,
+            HourlyRate = @hourlyRate,
+            BillableRate = @billableRate,
+            Currency = @currency,
+            CostCenter = @costCenter,
+            UpdatedAt = @updatedAt
+        WHERE ResourceID = @resourceId
+      `;
+      
+      const request = transaction.request()
         .input('resourceId', sql.Int, id)
         .input('name', sql.NVarChar, name)
-        .input('roleId', sql.Int, roleId)
-        .input('roleName', sql.NVarChar, roleName)
         .input('email', sql.NVarChar, email || null)
         .input('phone', sql.NVarChar, phone || null)
         .input('hourlyRate', sql.Decimal(10, 2), hourlyRate || null)
         .input('billableRate', sql.Decimal(10, 2), billableRate || null)
         .input('currency', sql.NVarChar, currency || 'USD')
         .input('costCenter', sql.NVarChar, costCenter || null)
-        .input('updatedAt', sql.DateTime2, new Date())
-        .query(`
-          UPDATE Resources
-          SET Name = @name,
-              RoleID = @roleId,
-              Role = @roleName,
-              Email = @email,
-              Phone = @phone,
-              HourlyRate = @hourlyRate,
-              BillableRate = @billableRate,
-              Currency = @currency,
-              CostCenter = @costCenter,
-              UpdatedAt = @updatedAt
-          WHERE ResourceID = @resourceId
-        `);
+        .input('updatedAt', sql.DateTime2, new Date());
+        
+      if (roleIdToUse !== null) {
+        request.input('roleId', sql.Int, roleIdToUse);
+      }
+      
+      if (roleName !== null) {
+        request.input('roleName', sql.NVarChar, roleName);
+      }
+      
+      await request.query(updateQuery);
       
       // Process skills if provided
       if (skills !== undefined) {
