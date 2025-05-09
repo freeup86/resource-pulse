@@ -4,6 +4,11 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
 
+// Apply monkey patch to fix path-to-regexp errors
+// This must be done before any routes are registered or required
+const applyPathToRegexpPatch = require('./monkey-patch');
+applyPathToRegexpPatch();
+
 // Import routes
 const resourceRoutes = require('./routes/resourceRoutes');
 const projectRoutes = require('./routes/projectRoutes');
@@ -35,8 +40,129 @@ const notificationScheduler = require('./services/notificationScheduler');
 // Load environment variables
 dotenv.config();
 
+// Route validation to catch path-to-regexp errors
+const validateRoutes = (router) => {
+  try {
+    // Safe wrapper to validate route patterns before they're used
+    const originalGet = router.get;
+    const originalPost = router.post;
+    const originalPut = router.put;
+    const originalDelete = router.delete;
+
+    // Wrap route methods to validate patterns
+    router.get = function(path, ...handlers) {
+      if (typeof path === 'string' && path.includes('/:')) {
+        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
+          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
+          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
+        }
+      }
+      return originalGet.call(this, path, ...handlers);
+    };
+
+    router.post = function(path, ...handlers) {
+      if (typeof path === 'string' && path.includes('/:')) {
+        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
+          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
+          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
+        }
+      }
+      return originalPost.call(this, path, ...handlers);
+    };
+
+    router.put = function(path, ...handlers) {
+      if (typeof path === 'string' && path.includes('/:')) {
+        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
+          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
+          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
+        }
+      }
+      return originalPut.call(this, path, ...handlers);
+    };
+
+    router.delete = function(path, ...handlers) {
+      if (typeof path === 'string' && path.includes('/:')) {
+        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
+          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
+          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
+        }
+      }
+      return originalDelete.call(this, path, ...handlers);
+    };
+
+    return router;
+  } catch (error) {
+    console.error('Error validating routes:', error);
+    return router;
+  }
+};
+
 // Create Express app
 const app = express();
+
+// Direct fix for path-to-regexp error - patches express route methods
+function sanitizeRoutePath(path) {
+  if (typeof path === 'string') {
+    // Replace any potential route pattern issues
+    return path
+      .replace(/\/:(\W|$)/g, '/_fixed_param$1')  // Fix empty parameter names
+      .replace(/\/:\//g, '/_fixed_param/');      // Fix parameter followed by slash
+  }
+  return path;
+}
+
+// Patch route methods to sanitize paths
+const originalAppGet = app.get;
+const originalAppPost = app.post;
+const originalAppPut = app.put;
+const originalAppDelete = app.delete;
+
+app.get = function(path, ...handlers) {
+  return originalAppGet.call(this, sanitizeRoutePath(path), ...handlers);
+};
+
+app.post = function(path, ...handlers) {
+  return originalAppPost.call(this, sanitizeRoutePath(path), ...handlers);
+};
+
+app.put = function(path, ...handlers) {
+  return originalAppPut.call(this, sanitizeRoutePath(path), ...handlers);
+};
+
+app.delete = function(path, ...handlers) {
+  return originalAppDelete.call(this, sanitizeRoutePath(path), ...handlers);
+};
+
+// Patch express.Router as well
+const originalRouter = express.Router;
+express.Router = function() {
+  const router = originalRouter.apply(this, arguments);
+  
+  const originalRouterGet = router.get;
+  const originalRouterPost = router.post;
+  const originalRouterPut = router.put;
+  const originalRouterDelete = router.delete;
+  
+  router.get = function(path, ...handlers) {
+    return originalRouterGet.call(this, sanitizeRoutePath(path), ...handlers);
+  };
+  
+  router.post = function(path, ...handlers) {
+    return originalRouterPost.call(this, sanitizeRoutePath(path), ...handlers);
+  };
+  
+  router.put = function(path, ...handlers) {
+    return originalRouterPut.call(this, sanitizeRoutePath(path), ...handlers);
+  };
+  
+  router.delete = function(path, ...handlers) {
+    return originalRouterDelete.call(this, sanitizeRoutePath(path), ...handlers);
+  };
+  
+  return router;
+};
+
+// Note: Router patching is already done above
 
 // Set up CORS middleware with more specific configuration
 const corsOptions = {
