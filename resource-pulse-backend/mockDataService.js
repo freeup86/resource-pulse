@@ -287,6 +287,13 @@ const shouldUseMock = () => {
   // Check for explicit env flag
   if (process.env.USE_MOCK_DATA === 'true') {
     console.log('Using mock data because USE_MOCK_DATA is set to true');
+
+    // Set mock environment defaults if not already set
+    if (!process.env.MAX_UTILIZATION_PERCENTAGE) {
+      process.env.MAX_UTILIZATION_PERCENTAGE = '100';
+      console.log('Setting default MAX_UTILIZATION_PERCENTAGE to 100%');
+    }
+
     // Initialize sample data if needed
     initializeSampleData();
     return true;
@@ -300,6 +307,13 @@ const shouldUseMock = () => {
     // If poolPromise is rejected or undefined, use mock data
     if (!pool) {
       console.log('Using mock data because database connection pool is not available');
+
+      // Set mock environment defaults if not already set
+      if (!process.env.MAX_UTILIZATION_PERCENTAGE) {
+        process.env.MAX_UTILIZATION_PERCENTAGE = '100';
+        console.log('Setting default MAX_UTILIZATION_PERCENTAGE to 100%');
+      }
+
       initializeSampleData();
       return true;
     }
@@ -308,6 +322,13 @@ const shouldUseMock = () => {
     return false;
   } catch (err) {
     console.log('Using mock data because of database error:', err.message);
+
+    // Set mock environment defaults if not already set
+    if (!process.env.MAX_UTILIZATION_PERCENTAGE) {
+      process.env.MAX_UTILIZATION_PERCENTAGE = '100';
+      console.log('Setting default MAX_UTILIZATION_PERCENTAGE to 100%');
+    }
+
     initializeSampleData();
     return true;
   }
@@ -1249,96 +1270,128 @@ const allocationService = {
 
   // Create a new allocation
   createAllocation: async (allocationData) => {
-    const {
-      resourceId,
-      projectId,
-      startDate,
-      endDate,
-      utilization,
-      hourlyRate,
-      billableRate,
-      isBillable,
-      notes
-    } = allocationData;
+    try {
+      const {
+        resourceId,
+        projectId,
+        startDate,
+        endDate,
+        utilization,
+        hourlyRate,
+        billableRate,
+        isBillable,
+        notes,
+        totalHours: providedTotalHours
+      } = allocationData;
 
-    // Validate required fields
-    if (!resourceId || !projectId || !startDate || !endDate) {
-      throw new Error('Resource ID, Project ID, Start Date, and End Date are required');
+      // Validate required fields
+      if (!resourceId || !projectId || !startDate || !endDate) {
+        throw new Error('Resource ID, Project ID, Start Date, and End Date are required');
+      }
+
+      // Verify resource and project exist
+      const resource = mockDb.resources.find(r => r.id === parseInt(resourceId));
+      const project = mockDb.projects.find(p => p.id === parseInt(projectId));
+
+      if (!resource) {
+        throw new Error('Resource not found');
+      }
+
+      if (!project) {
+        throw new Error('Project not found');
+      }
+
+      // Check for maximum utilization from system settings
+      // Default to 100%, but read from env variable or system override
+      const maxUtilization = parseInt(process.env.MAX_UTILIZATION_PERCENTAGE) || 100;
+
+      // Get existing utilization for this resource in the given date range
+      const existingUtilization = mockDb.allocations
+        .filter(a =>
+          a.resourceId === parseInt(resourceId) &&
+          a.projectId !== parseInt(projectId) &&
+          new Date(a.endDate) >= new Date(startDate) &&
+          new Date(a.startDate) <= new Date(endDate)
+        )
+        .reduce((sum, a) => sum + a.utilization, 0);
+
+      // Check if this allocation would exceed max utilization
+      if (existingUtilization + parseFloat(utilization || 100) > maxUtilization) {
+        throw new Error(`This allocation would exceed ${maxUtilization}% utilization. Current utilization in this period: ${existingUtilization}%`);
+      }
+
+      // Calculate working days between start and end date
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const workingDays = calculateWorkingDays(start, end);
+
+      // Calculate hours and costs
+      const hoursPerDay = 8; // Standard 8-hour workday
+      const utilizationPercent = utilization ? parseFloat(utilization) / 100 : 1;
+      const totalHours = providedTotalHours || (workingDays * hoursPerDay * utilizationPercent);
+      const hourlyRateValue = hourlyRate || resource.costRate || 0;
+      const billableRateValue = billableRate || (hourlyRateValue * 2) || 0;
+      const totalCost = totalHours * hourlyRateValue;
+      const billableAmount = isBillable === false ? 0 : totalHours * billableRateValue;
+
+      // Create allocation
+      const allocationId = nextId('allocations');
+      const newAllocation = {
+        id: allocationId,
+        resourceId: parseInt(resourceId),
+        projectId: parseInt(projectId),
+        startDate: start,
+        endDate: end,
+        utilization: parseFloat(utilization) || 100,
+        hourlyRate: hourlyRateValue,
+        billableRate: billableRateValue,
+        totalHours,
+        totalCost,
+        billableAmount,
+        isBillable: isBillable === false ? false : true,
+        notes: notes || null
+      };
+
+      mockDb.allocations.push(newAllocation);
+
+      // Update project financials
+      try {
+        // Call recalculateFinancials to properly update all project financial metrics
+        await projectService.recalculateFinancials(project.id);
+      } catch (financialError) {
+        console.error(`Error recalculating financials for project ${project.id}:`, financialError);
+        // Continue with basic financial update even if recalculation fails
+        project.actualCost = (project.actualCost || 0) + totalCost;
+        project.budgetUtilization = project.budget > 0 ? (project.actualCost / project.budget) * 100 : 0;
+      }
+
+      // Return the created allocation
+      return {
+        id: newAllocation.id,
+        project: {
+          id: project.id,
+          name: project.name
+        },
+        resource: {
+          id: resource.id,
+          name: resource.name,
+          role: resource.role
+        },
+        startDate: newAllocation.startDate,
+        endDate: newAllocation.endDate,
+        utilization: newAllocation.utilization,
+        hourlyRate: newAllocation.hourlyRate,
+        billableRate: newAllocation.billableRate,
+        totalHours: newAllocation.totalHours,
+        totalCost: newAllocation.totalCost,
+        billableAmount: newAllocation.billableAmount,
+        isBillable: newAllocation.isBillable,
+        notes: newAllocation.notes
+      };
+    } catch (error) {
+      console.error('Error in mock createAllocation:', error);
+      throw error;
     }
-
-    // Verify resource and project exist
-    const resource = mockDb.resources.find(r => r.id === parseInt(resourceId));
-    const project = mockDb.projects.find(p => p.id === parseInt(projectId));
-
-    if (!resource) {
-      throw new Error('Resource not found');
-    }
-
-    if (!project) {
-      throw new Error('Project not found');
-    }
-
-    // Calculate working days between start and end date
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const workingDays = calculateWorkingDays(start, end);
-
-    // Calculate hours and costs
-    const hoursPerDay = 8; // Standard 8-hour workday
-    const utilizationPercent = utilization ? parseFloat(utilization) / 100 : 1;
-    const totalHours = workingDays * hoursPerDay * utilizationPercent;
-    const hourlyRateValue = hourlyRate || resource.costRate || 0;
-    const billableRateValue = billableRate || (hourlyRateValue * 2) || 0;
-    const totalCost = totalHours * hourlyRateValue;
-    const billableAmount = isBillable ? totalHours * billableRateValue : 0;
-
-    // Create allocation
-    const allocationId = nextId('allocations');
-    const newAllocation = {
-      id: allocationId,
-      resourceId: parseInt(resourceId),
-      projectId: parseInt(projectId),
-      startDate: start,
-      endDate: end,
-      utilization: parseFloat(utilization) || 100,
-      hourlyRate: hourlyRateValue,
-      billableRate: billableRateValue,
-      totalHours,
-      totalCost,
-      billableAmount,
-      isBillable: !!isBillable,
-      notes: notes || null
-    };
-
-    mockDb.allocations.push(newAllocation);
-
-    // Update project financials
-    project.actualCost = (project.actualCost || 0) + totalCost;
-    project.budgetUtilization = project.budget > 0 ? (project.actualCost / project.budget) * 100 : 0;
-
-    // Return the created allocation
-    return {
-      id: newAllocation.id,
-      project: {
-        id: project.id,
-        name: project.name
-      },
-      resource: {
-        id: resource.id,
-        name: resource.name,
-        role: resource.role
-      },
-      startDate: newAllocation.startDate,
-      endDate: newAllocation.endDate,
-      utilization: newAllocation.utilization,
-      hourlyRate: newAllocation.hourlyRate,
-      billableRate: newAllocation.billableRate,
-      totalHours: newAllocation.totalHours,
-      totalCost: newAllocation.totalCost,
-      billableAmount: newAllocation.billableAmount,
-      isBillable: newAllocation.isBillable,
-      notes: newAllocation.notes
-    };
   },
 
   // Get allocation by ID
@@ -1379,120 +1432,202 @@ const allocationService = {
 
   // Update an allocation
   updateAllocation: async (id, allocationData) => {
-    const allocationId = parseInt(id);
-    const allocationIndex = mockDb.allocations.findIndex(a => a.id === allocationId);
+    try {
+      const allocationId = parseInt(id);
+      const allocationIndex = mockDb.allocations.findIndex(a => a.id === allocationId);
 
-    if (allocationIndex === -1) {
-      throw new Error('Allocation not found');
-    }
-
-    const allocation = mockDb.allocations[allocationIndex];
-    const {
-      resourceId,
-      projectId,
-      startDate,
-      endDate,
-      utilization,
-      hourlyRate,
-      billableRate,
-      isBillable,
-      notes
-    } = allocationData;
-
-    // Verify resource and project if changed
-    let resource = mockDb.resources.find(r => r.id === allocation.resourceId);
-    let project = mockDb.projects.find(p => p.id === allocation.projectId);
-
-    if (resourceId && resourceId !== allocation.resourceId) {
-      resource = mockDb.resources.find(r => r.id === parseInt(resourceId));
-      if (!resource) {
-        throw new Error('Resource not found');
+      if (allocationIndex === -1) {
+        throw new Error('Allocation not found');
       }
-    }
 
-    if (projectId && projectId !== allocation.projectId) {
-      project = mockDb.projects.find(p => p.id === parseInt(projectId));
-      if (!project) {
-        throw new Error('Project not found');
+      const allocation = mockDb.allocations[allocationIndex];
+      const {
+        resourceId,
+        projectId,
+        startDate,
+        endDate,
+        utilization,
+        hourlyRate,
+        billableRate,
+        isBillable,
+        notes,
+        totalHours: providedTotalHours
+      } = allocationData;
+
+      // Verify resource and project if changed
+      let resource = mockDb.resources.find(r => r.id === allocation.resourceId);
+      let project = mockDb.projects.find(p => p.id === allocation.projectId);
+      let oldProject = project;
+
+      if (resourceId && resourceId !== allocation.resourceId) {
+        resource = mockDb.resources.find(r => r.id === parseInt(resourceId));
+        if (!resource) {
+          throw new Error('Resource not found');
+        }
       }
-    }
 
-    // Subtract current allocation cost from project financials
-    if (project.id === allocation.projectId) {
-      project.actualCost = (project.actualCost || 0) - (allocation.totalCost || 0);
-    } else {
-      const oldProject = mockDb.projects.find(p => p.id === allocation.projectId);
-      if (oldProject) {
-        oldProject.actualCost = (oldProject.actualCost || 0) - (allocation.totalCost || 0);
-        oldProject.budgetUtilization = oldProject.budget > 0 ? (oldProject.actualCost / oldProject.budget) * 100 : 0;
+      if (projectId && projectId !== allocation.projectId) {
+        project = mockDb.projects.find(p => p.id === parseInt(projectId));
+        if (!project) {
+          throw new Error('Project not found');
+        }
+
+        // If project is changing, we need to track the old project for financial recalculation
+        oldProject = mockDb.projects.find(p => p.id === allocation.projectId);
       }
+
+      // Check for maximum utilization if utilization is changing
+      if (utilization !== undefined) {
+        const maxUtilization = 100;
+        const newUtilizationValue = parseFloat(utilization);
+
+        // Get existing utilization for this resource in the given date range (excluding this allocation)
+        const start = startDate ? new Date(startDate) : allocation.startDate;
+        const end = endDate ? new Date(endDate) : allocation.endDate;
+        const targetProjectId = projectId ? parseInt(projectId) : allocation.projectId;
+
+        const existingUtilization = mockDb.allocations
+          .filter(a =>
+            a.resourceId === (resourceId ? parseInt(resourceId) : allocation.resourceId) &&
+            a.id !== allocationId &&
+            a.projectId !== targetProjectId &&
+            new Date(a.endDate) >= start &&
+            new Date(a.startDate) <= end
+          )
+          .reduce((sum, a) => sum + a.utilization, 0);
+
+        // Check if this allocation would exceed max utilization
+        if (existingUtilization + newUtilizationValue > maxUtilization) {
+          throw new Error(`This allocation would exceed ${maxUtilization}% utilization. Current utilization in this period: ${existingUtilization}%`);
+        }
+      }
+
+      // Calculate updated allocation
+      const start = startDate ? new Date(startDate) : allocation.startDate;
+      const end = endDate ? new Date(endDate) : allocation.endDate;
+
+      // Calculate working days and hours only if not provided directly
+      let totalHours;
+      if (providedTotalHours !== undefined) {
+        totalHours = parseFloat(providedTotalHours);
+      } else {
+        const workingDays = calculateWorkingDays(start, end);
+        const hoursPerDay = 8;
+        const utilizationPercent = utilization !== undefined ? parseFloat(utilization) / 100 : allocation.utilization / 100;
+        totalHours = workingDays * hoursPerDay * utilizationPercent;
+      }
+
+      const hourlyRateValue = hourlyRate !== undefined ? hourlyRate : allocation.hourlyRate;
+      const billableRateValue = billableRate !== undefined ? billableRate : allocation.billableRate;
+      const isBillableValue = isBillable !== undefined ? !!isBillable : allocation.isBillable;
+
+      const totalCost = totalHours * hourlyRateValue;
+      const billableAmount = isBillableValue ? totalHours * billableRateValue : 0;
+
+      // Update allocation
+      const updatedAllocation = {
+        ...allocation,
+        resourceId: resourceId ? parseInt(resourceId) : allocation.resourceId,
+        projectId: projectId ? parseInt(projectId) : allocation.projectId,
+        startDate: start,
+        endDate: end,
+        utilization: utilization !== undefined ? parseFloat(utilization) : allocation.utilization,
+        hourlyRate: hourlyRateValue,
+        billableRate: billableRateValue,
+        totalHours,
+        totalCost,
+        billableAmount,
+        isBillable: isBillableValue,
+        notes: notes !== undefined ? notes : allocation.notes
+      };
+
+      mockDb.allocations[allocationIndex] = updatedAllocation;
+
+      // Update project financials using proper recalculation function
+      try {
+        // Update the new project financials
+        await projectService.recalculateFinancials(project.id);
+
+        // If the project changed, update the old project financials too
+        if (oldProject && oldProject.id !== project.id) {
+          await projectService.recalculateFinancials(oldProject.id);
+        }
+      } catch (financialError) {
+        console.error(`Error recalculating financials for projects:`, financialError);
+
+        // Basic fallback update if recalculation fails
+        // For new project
+        project.actualCost = (project.actualCost || 0) + totalCost;
+        project.budgetUtilization = project.budget > 0 ? (project.actualCost / project.budget) * 100 : 0;
+
+        // For old project if different
+        if (oldProject && oldProject.id !== project.id) {
+          // Recalculate old project's cost by summing remaining allocations
+          const oldProjectAllocations = mockDb.allocations.filter(a => a.projectId === oldProject.id);
+          const oldProjectTotalCost = oldProjectAllocations.reduce((sum, a) => sum + (a.totalCost || 0), 0);
+
+          oldProject.actualCost = oldProjectTotalCost;
+          oldProject.budgetUtilization = oldProject.budget > 0 ?
+            (oldProject.actualCost / oldProject.budget) * 100 : 0;
+        }
+      }
+
+      // Return updated allocation
+      return allocationService.getAllocationById(allocationId);
+    } catch (error) {
+      console.error('Error in mock updateAllocation:', error);
+      throw error;
     }
-
-    // Calculate updated allocation
-    const start = startDate ? new Date(startDate) : allocation.startDate;
-    const end = endDate ? new Date(endDate) : allocation.endDate;
-    const workingDays = calculateWorkingDays(start, end);
-
-    const hoursPerDay = 8;
-    const utilizationPercent = utilization !== undefined ? parseFloat(utilization) / 100 : allocation.utilization / 100;
-    const totalHours = workingDays * hoursPerDay * utilizationPercent;
-
-    const hourlyRateValue = hourlyRate !== undefined ? hourlyRate : allocation.hourlyRate;
-    const billableRateValue = billableRate !== undefined ? billableRate : allocation.billableRate;
-    const isBillableValue = isBillable !== undefined ? !!isBillable : allocation.isBillable;
-
-    const totalCost = totalHours * hourlyRateValue;
-    const billableAmount = isBillableValue ? totalHours * billableRateValue : 0;
-
-    // Update allocation
-    const updatedAllocation = {
-      ...allocation,
-      resourceId: resourceId ? parseInt(resourceId) : allocation.resourceId,
-      projectId: projectId ? parseInt(projectId) : allocation.projectId,
-      startDate: start,
-      endDate: end,
-      utilization: utilization !== undefined ? parseFloat(utilization) : allocation.utilization,
-      hourlyRate: hourlyRateValue,
-      billableRate: billableRateValue,
-      totalHours,
-      totalCost,
-      billableAmount,
-      isBillable: isBillableValue,
-      notes: notes !== undefined ? notes : allocation.notes
-    };
-
-    mockDb.allocations[allocationIndex] = updatedAllocation;
-
-    // Add updated allocation cost to project financials
-    project.actualCost = (project.actualCost || 0) + totalCost;
-    project.budgetUtilization = project.budget > 0 ? (project.actualCost / project.budget) * 100 : 0;
-
-    // Return updated allocation
-    return allocationService.getAllocationById(allocationId);
   },
 
   // Delete an allocation
   deleteAllocation: async (id) => {
-    const allocationId = parseInt(id);
-    const allocationIndex = mockDb.allocations.findIndex(a => a.id === allocationId);
+    try {
+      const allocationId = parseInt(id);
+      const allocationIndex = mockDb.allocations.findIndex(a => a.id === allocationId);
 
-    if (allocationIndex === -1) {
-      throw new Error('Allocation not found');
+      if (allocationIndex === -1) {
+        throw new Error('Allocation not found');
+      }
+
+      const allocation = mockDb.allocations[allocationIndex];
+      const projectId = allocation.projectId;
+
+      // Remove allocation
+      mockDb.allocations.splice(allocationIndex, 1);
+
+      // Update project financials using proper recalculation
+      try {
+        // Get the project
+        const project = mockDb.projects.find(p => p.id === projectId);
+        if (project) {
+          // Use the project service to recalculate financials properly
+          await projectService.recalculateFinancials(projectId);
+        }
+      } catch (financialError) {
+        console.error(`Error recalculating financials for project ${projectId} after allocation removal:`, financialError);
+
+        // Fallback manual recalculation if the service call fails
+        const project = mockDb.projects.find(p => p.id === projectId);
+        if (project) {
+          // Sum up all remaining allocations for this project
+          const remainingAllocations = mockDb.allocations.filter(a => a.projectId === projectId);
+          const totalCost = remainingAllocations.reduce((sum, a) => sum + (a.totalCost || 0), 0);
+
+          // Update project financials directly
+          project.actualCost = totalCost;
+          project.budgetUtilization = project.budget > 0 ? (totalCost / project.budget) * 100 : 0;
+        }
+      }
+
+      return {
+        message: 'Allocation deleted successfully',
+        deletedCount: 1
+      };
+    } catch (error) {
+      console.error('Error in mock deleteAllocation:', error);
+      throw error;
     }
-
-    const allocation = mockDb.allocations[allocationIndex];
-
-    // Update project financials
-    const project = mockDb.projects.find(p => p.id === allocation.projectId);
-    if (project) {
-      project.actualCost = Math.max(0, (project.actualCost || 0) - (allocation.totalCost || 0));
-      project.budgetUtilization = project.budget > 0 ? (project.actualCost / project.budget) * 100 : 0;
-    }
-
-    // Remove allocation
-    mockDb.allocations.splice(allocationIndex, 1);
-
-    return { message: 'Allocation deleted successfully' };
   },
 
   // Get unallocated resources
