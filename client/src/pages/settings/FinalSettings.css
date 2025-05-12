@@ -1,0 +1,124 @@
+/* Reset all box models */
+.final-settings-container * {
+  box-sizing: border-box !important;
+}
+
+/* Main container with negative margin to counteract layout padding */
+.final-settings-container {
+  margin: -24px !important;
+  width: calc(100% + 48px) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Settings header */
+.final-settings-header {
+  padding: 16px 24px !important;
+  margin: 0 !important;
+}
+
+/* Layout container */
+.final-settings-layout {
+  display: flex !important;
+  width: 100% !important;
+  height: calc(100vh - 132px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background-color: #fff !important;
+  box-shadow: none !important;
+}
+
+/* Sidebar with fixed width */
+.final-settings-sidebar {
+  width: 200px !important;
+  flex-shrink: 0 !important;
+  background-color: #fff !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.12) !important;
+  overflow-y: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Content area */
+.final-settings-content {
+  flex: 1 !important;
+  padding: 20px !important;
+  overflow-y: auto !important;
+  background-color: #fff !important;
+  margin: 0 !important;
+}
+
+/* Section headers */
+.final-settings-section-header {
+  padding: 12px 16px 4px 16px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  text-transform: uppercase !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Navigation items */
+.final-settings-nav-item {
+  display: flex !important;
+  align-items: center !important;
+  padding: 8px 16px !important;
+  cursor: pointer !important;
+  margin: 0 !important;
+  transition: background-color 0.2s !important;
+}
+
+.final-settings-nav-item:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+.final-settings-nav-item.active {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+  border-left: 3px solid #1976d2 !important;
+}
+
+/* Navigation item icon */
+.final-settings-nav-icon {
+  margin-right: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: inherit !important;
+}
+
+.final-settings-nav-item.active .final-settings-nav-icon {
+  color: #1976d2 !important;
+}
+
+/* Navigation item text */
+.final-settings-nav-text {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+}
+
+.final-settings-nav-item.active .final-settings-nav-text {
+  font-weight: 500 !important;
+  color: #1976d2 !important;
+}
+
+/* Divider */
+.final-settings-divider {
+  height: 1px !important;
+  background-color: rgba(0, 0, 0, 0.12) !important;
+  margin: 8px 0 !important;
+}
+
+/* Handle mobile screens */
+@media (max-width: 600px) {
+  .final-settings-layout {
+    flex-direction: column !important;
+    height: auto !important;
+  }
+  
+  .final-settings-sidebar {
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
+  }
+}

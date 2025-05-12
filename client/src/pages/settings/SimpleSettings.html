@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Simple Settings Page</title>
+  <style>
+    /* Reset all margins and paddings */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+    }
+    
+    .container {
+      width: 100%;
+      min-height: 100vh;
+      background: #f5f5f5;
+      padding: 0; /* No padding at all */
+    }
+    
+    .content-wrapper {
+      display: flex;
+      background: white;
+      border: 1px solid #ddd;
+      height: calc(100vh - 120px);
+    }
+    
+    /* Sidebar */
+    .sidebar {
+      width: 200px;
+      background: white;
+      border-right: 1px solid #ddd;
+    }
+    
+    .sidebar-header {
+      padding: 12px;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #666;
+      font-weight: bold;
+    }
+    
+    .sidebar-menu {
+      list-style: none;
+    }
+    
+    .sidebar-menu li {
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    
+    .sidebar-menu li.active {
+      background: #f0f0f0;
+      border-left: 3px solid #1976d2;
+    }
+    
+    .sidebar-menu li:hover {
+      background: #f5f5f5;
+    }
+    
+    /* Main content */
+    .main-content {
+      flex: 1;
+      padding: 20px;
+      overflow: auto;
+    }
+    
+    h1 {
+      margin-bottom: 20px;
+    }
+    
+    /* Form elements */
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+    }
+    
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    
+    .button {
+      padding: 8px 16px;
+      background: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .button:hover {
+      background: #1565c0;
+    }
+    
+    .divider {
+      height: 1px;
+      background: #ddd;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 style="padding: 16px;">Settings</h1>
+    
+    <div class="content-wrapper">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header">Account</div>
+        <ul class="sidebar-menu">
+          <li class="active">Profile Settings</li>
+          <li>Notification Preferences</li>
+          <li>Security</li>
+        </ul>
+        
+        <div class="divider"></div>
+        
+        <div class="sidebar-header">System</div>
+        <ul class="sidebar-menu">
+          <li>Organization Settings</li>
+          <li>Email Templates</li>
+        </ul>
+      </div>
+      
+      <!-- Main Content -->
+      <div class="main-content">
+        <h2>Profile Settings</h2>
+        <p>Manage your profile information and preferences.</p>
+        
+        <form>
+          <div class="form-group">
+            <label for="firstName">First Name</label>
+            <input type="text" id="firstName" value="John" />
+          </div>
+          
+          <div class="form-group">
+            <label for="lastName">Last Name</label>
+            <input type="text" id="lastName" value="Doe" />
+          </div>
+          
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" value="john.doe@example.com" />
+          </div>
+          
+          <div class="form-group">
+            <label for="language">Preferred Language</label>
+            <select id="language">
+              <option value="en">English</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+            </select>
+          </div>
+          
+          <button type="button" class="button">Save Changes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
