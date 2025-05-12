@@ -71,13 +71,26 @@ const ExcelImport = ({ onImportData, dataType }) => {
           const initialMappings = {};
           excelHeaders.forEach((header, index) => {
             // Try to auto-match headers (case-insensitive)
-            const lowerHeader = header.toLowerCase();
-            const matchingField = fieldDefinitions[dataType].find(
+            const lowerHeader = header.toLowerCase().trim();
+
+            // First try exact match
+            const exactMatch = fieldDefinitions[dataType].find(
               field => field.name.toLowerCase() === lowerHeader
             );
-            
-            if (matchingField) {
-              initialMappings[matchingField.name] = index;
+
+            if (exactMatch) {
+              initialMappings[exactMatch.name] = index;
+              console.log(`Auto-mapped ${header} to ${exactMatch.name}`);
+            } else {
+              // Try fuzzy match - if header contains field name
+              const fuzzyMatch = fieldDefinitions[dataType].find(
+                field => lowerHeader.includes(field.name.toLowerCase())
+              );
+
+              if (fuzzyMatch && !initialMappings[fuzzyMatch.name]) {
+                initialMappings[fuzzyMatch.name] = index;
+                console.log(`Fuzzy-mapped ${header} to ${fuzzyMatch.name}`);
+              }
             }
           });
           setMappings(initialMappings);
@@ -98,7 +111,7 @@ const ExcelImport = ({ onImportData, dataType }) => {
   const handleMappingChange = (field, headerIndex) => {
     setMappings(prev => ({
       ...prev,
-      [field]: parseInt(headerIndex)
+      [field]: headerIndex === '' ? undefined : parseInt(headerIndex)
     }));
   };
   
@@ -347,11 +360,11 @@ const ExcelImport = ({ onImportData, dataType }) => {
                   <span className="text-xs text-gray-500 ml-1">({field.description})</span>
                 </label>
                 <select
-                  value={mappings[field.name] || ''}
+                  value={mappings[field.name] !== undefined ? mappings[field.name] : ''}
                   onChange={(e) => handleMappingChange(field.name, e.target.value)}
                   className={`w-full p-2 border rounded ${
-                    field.required && !mappings[field.name] 
-                      ? 'border-red-500' 
+                    field.required && mappings[field.name] === undefined
+                      ? 'border-red-500'
                       : 'border-gray-300'
                   }`}
                 >
@@ -362,6 +375,9 @@ const ExcelImport = ({ onImportData, dataType }) => {
                     </option>
                   ))}
                 </select>
+                {mappings[field.name] === undefined && field.required && (
+                  <p className="text-red-500 text-xs mt-1">This field is required</p>
+                )}
               </div>
             ))}
           </div>

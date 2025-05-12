@@ -844,13 +844,30 @@ exports.deleteResource = async (req, res) => {
     const checkResource = await pool.request()
       .input('resourceId', sql.Int, id)
       .query(`
-        SELECT ResourceID FROM Resources WHERE ResourceID = @resourceId
+        SELECT ResourceID, Name FROM Resources WHERE ResourceID = @resourceId
       `);
-    
+
     if (checkResource.recordset.length === 0) {
       return res.status(404).json({ message: 'Resource not found' });
     }
-    
+
+    const resourceName = checkResource.recordset[0].Name;
+
+    // Check if resource has any active allocations
+    const checkAllocations = await pool.request()
+      .input('resourceId', sql.Int, id)
+      .query(`
+        SELECT COUNT(*) AS AllocationCount
+        FROM Allocations
+        WHERE ResourceID = @resourceId
+      `);
+
+    if (checkAllocations.recordset[0].AllocationCount > 0) {
+      return res.status(400).json({
+        message: 'Cannot delete resource that has active allocations. Please remove allocations first.'
+      });
+    }
+
     // Delete resource (cascade will handle related records)
     await pool.request()
       .input('resourceId', sql.Int, id)
@@ -858,8 +875,8 @@ exports.deleteResource = async (req, res) => {
         DELETE FROM Resources
         WHERE ResourceID = @resourceId
       `);
-    
-    res.json({ message: 'Resource deleted successfully' });
+
+    res.json({ message: `Resource "${resourceName}" deleted successfully` });
   } catch (err) {
     console.error('Error deleting resource:', err);
     res.status(500).json({

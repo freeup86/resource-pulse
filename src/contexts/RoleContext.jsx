@@ -77,7 +77,12 @@ export const RoleProvider = ({ children }) => {
       await roleService.deleteRole(roleId);
       dispatch({ type: 'DELETE_ROLE', payload: roleId });
     } catch (err) {
-      setError('Failed to delete role');
+      // Set a more specific error message if available
+      if (err.response && err.response.data && err.response.data.message) {
+        setError(err.response.data.message);
+      } else {
+        setError('Failed to delete role');
+      }
       throw err;
     }
   };

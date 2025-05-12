@@ -284,15 +284,33 @@ const nextId = (entityType) => {
 
 // Check if mock data should be used
 const shouldUseMock = () => {
-  // Check for database connection error or specific env flag
+  // Check for explicit env flag
   if (process.env.USE_MOCK_DATA === 'true') {
+    console.log('Using mock data because USE_MOCK_DATA is set to true');
     // Initialize sample data if needed
     initializeSampleData();
     return true;
   }
 
-  // DB connection check could go here
-  return false;
+  // Check for database connection
+  try {
+    const { poolPromise } = require('./db/config');
+    const pool = poolPromise;
+
+    // If poolPromise is rejected or undefined, use mock data
+    if (!pool) {
+      console.log('Using mock data because database connection pool is not available');
+      initializeSampleData();
+      return true;
+    }
+
+    // Database connection is available, don't use mock data
+    return false;
+  } catch (err) {
+    console.log('Using mock data because of database error:', err.message);
+    initializeSampleData();
+    return true;
+  }
 };
 
 // Mock project service
@@ -891,11 +909,7 @@ const resourceService = {
         .filter(rs => rs.resourceId === resource.id)
         .map(rs => {
           const skill = mockDb.skills.find(s => s.id === rs.skillId);
-          return skill ? {
-            id: skill.id,
-            name: skill.name,
-            proficiency: rs.proficiency
-          } : null;
+          return skill ? skill.name : null;
         })
         .filter(Boolean);
 
@@ -951,11 +965,7 @@ const resourceService = {
       .filter(rs => rs.resourceId === resourceId)
       .map(rs => {
         const skill = mockDb.skills.find(s => s.id === rs.skillId);
-        return skill ? {
-          id: skill.id,
-          name: skill.name,
-          proficiency: rs.proficiency
-        } : null;
+        return skill ? skill.name : null;
       })
       .filter(Boolean);
 
@@ -1638,11 +1648,130 @@ function calculateWorkingDays(startDate, endDate) {
   return workingDays;
 }
 
+// Mock role service
+const roleService = {
+  // Get all roles
+  getAllRoles: async () => {
+    return mockDb.roles.map(role => ({
+      id: role.id,
+      name: role.name,
+      description: role.description
+    }));
+  },
+
+  // Create a new role
+  createRole: async (roleData) => {
+    const { name, description } = roleData;
+
+    if (!name) {
+      throw new Error('Role name is required');
+    }
+
+    // Check if role already exists
+    const existingRole = mockDb.roles.find(r => r.name.toLowerCase() === name.toLowerCase());
+    if (existingRole) {
+      throw new Error('Role with this name already exists');
+    }
+
+    // Create role
+    const roleId = nextId('roles');
+    const newRole = {
+      id: roleId,
+      name,
+      description: description || null
+    };
+
+    mockDb.roles.push(newRole);
+
+    return {
+      id: newRole.id,
+      name: newRole.name,
+      description: newRole.description
+    };
+  },
+
+  // Get role by ID
+  getRoleById: async (id) => {
+    const roleId = parseInt(id);
+    const role = mockDb.roles.find(r => r.id === roleId);
+
+    if (!role) {
+      throw new Error('Role not found');
+    }
+
+    return {
+      id: role.id,
+      name: role.name,
+      description: role.description
+    };
+  },
+
+  // Update role
+  updateRole: async (id, roleData) => {
+    const roleId = parseInt(id);
+    const roleIndex = mockDb.roles.findIndex(r => r.id === roleId);
+
+    if (roleIndex === -1) {
+      throw new Error('Role not found');
+    }
+
+    const { name, description } = roleData;
+
+    if (!name) {
+      throw new Error('Role name is required');
+    }
+
+    // Update role
+    mockDb.roles[roleIndex] = {
+      ...mockDb.roles[roleIndex],
+      name,
+      description: description || null
+    };
+
+    return {
+      id: mockDb.roles[roleIndex].id,
+      name: mockDb.roles[roleIndex].name,
+      description: mockDb.roles[roleIndex].description
+    };
+  },
+
+  // Delete role
+  deleteRole: async (id) => {
+    const roleId = parseInt(id);
+    const roleIndex = mockDb.roles.findIndex(r => r.id === roleId);
+
+    if (roleIndex === -1) {
+      throw new Error('Role not found');
+    }
+
+    // Check if role is used by resources
+    const isUsedByResource = mockDb.resources.some(r => r.role === mockDb.roles[roleIndex].name);
+
+    if (isUsedByResource) {
+      throw new Error('Cannot delete role that is assigned to resources. Update resources first.');
+    }
+
+    // Check if role is used in projects
+    const isUsedInProject = mockDb.projectRoles.some(pr => pr.roleId === roleId);
+
+    if (isUsedInProject) {
+      throw new Error('Cannot delete role that is required by projects. Update projects first.');
+    }
+
+    // Delete role
+    const roleName = mockDb.roles[roleIndex].name;
+    mockDb.roles.splice(roleIndex, 1);
+
+    return { message: `Role "${roleName}" deleted successfully` };
+  }
+};
+
 // Export services and utility functions
 module.exports = {
   shouldUseMock,
   projectService,
   resourceService,
   allocationService,
-  skillsService
+  skillsService,
+  roleService
 };

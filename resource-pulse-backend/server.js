@@ -177,7 +177,7 @@ express.Router = function() {
 
 // Set up CORS middleware with more specific configuration
 const corsOptions = {
-  origin: ['https://resource-pulse.onrender.com', 'http://localhost:3000'],
+  origin: ['https://resource-pulse.onrender.com', 'http://localhost:3000', 'http://localhost:8001'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']

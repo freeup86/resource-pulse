@@ -263,8 +263,16 @@ export const ResourceProvider = ({ children }) => {
         try {
           await resourceService.deleteResource(resourceId);
           dispatch({ type: 'DELETE_RESOURCE', payload: resourceId });
+          // Clear any previous error on successful deletion
+          setError(null);
         } catch (err) {
-          setError('Failed to delete resource');
+          // Set a more specific error message if available from the API
+          if (err.response && err.response.data && err.response.data.message) {
+            setError(err.response.data.message);
+          } else {
+            setError('Failed to delete resource. It may be assigned to a project or have active allocations.');
+          }
+          // Rethrow the error so the component can handle it with a modal
           throw err;
         }
       },
