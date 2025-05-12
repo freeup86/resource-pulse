@@ -29,7 +29,6 @@ const ResourcesList = ({ onEdit, resources }) => {
   };
   
   if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message={error} />;
   
   return (
     <>

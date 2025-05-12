@@ -87,11 +87,17 @@ export const RoleProvider = ({ children }) => {
     }
   };
 
+  // Function to clear errors
+  const clearError = () => {
+    setError(null);
+  };
+
   return (
-    <RoleContext.Provider value={{ 
-      roles, 
+    <RoleContext.Provider value={{
+      roles,
       loading,
       error,
+      clearError,
       addRole,
       updateRole,
       deleteRole

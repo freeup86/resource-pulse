@@ -4,10 +4,11 @@ import TabNav from '../layout/TabNav';
 import ResourcesList from './ResourcesList';
 import ResourceForm from './ResourceForm';
 import SearchFilter from '../common/SearchFilter';
+import ErrorMessage from '../common/ErrorMessage';
 import { useResources } from '../../contexts/ResourceContext';
 
 const ResourcesPage = () => {
-  const { resources } = useResources();
+  const { resources, error, clearError, loading } = useResources();
   const location = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [selectedResource, setSelectedResource] = useState(null);
@@ -63,33 +64,39 @@ const ResourcesPage = () => {
     });
   }, [resources, statusFilter, searchTerm]);
   
+  if (loading) {
+    return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold">Resources Management</h2>
-        <button 
+        <button
           onClick={handleAddNew}
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
         >
           Add New Resource
         </button>
       </div>
-      
+
       <TabNav />
-      
-      <SearchFilter 
+
+      {error && <ErrorMessage message={error} onDismiss={clearError} />}
+
+      <SearchFilter
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         filters={filterOptions}
         onFilterChange={setStatusFilter}
       />
-      
+
       <ResourcesList onEdit={handleEdit} resources={filteredResources} />
-      
+
       {showForm && (
-        <ResourceForm 
-          resource={selectedResource} 
-          onClose={handleCloseForm} 
+        <ResourceForm
+          resource={selectedResource}
+          onClose={handleCloseForm}
         />
       )}
     </div>

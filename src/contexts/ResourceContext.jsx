@@ -233,11 +233,17 @@ export const ResourceProvider = ({ children }) => {
     }
   };
 
+  // Function to clear errors
+  const clearError = () => {
+    setError(null);
+  };
+
   return (
-    <ResourceContext.Provider value={{ 
-      resources, 
+    <ResourceContext.Provider value={{
+      resources,
       loading,
       error,
+      clearError,
       refreshResources,
       addResource: async (resource) => {
         try {
