@@ -10,6 +10,8 @@ const ProjectForm = ({ project = null, onClose }) => {
     name: '',
     client: '',
     description: '',
+    projectNumber: '',
+    projectOwner: '',
     requiredSkills: [],
     skillInput: '',
     requiredRoles: [], // Array of {roleId, count} objects
@@ -19,26 +21,71 @@ const ProjectForm = ({ project = null, onClose }) => {
   });
   const [errors, setErrors] = useState({});
 
+  // Helper function to format dates for the date input
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+
+    try {
+      // Create a date object using the original date string
+      const date = new Date(dateString);
+
+      // Get year, month, and day, adjusting for timezone differences
+      // Use UTC values to avoid timezone offset issues
+      const year = date.getUTCFullYear();
+      // getUTCMonth() returns 0-11, so we need to add 1
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+
+      // Format as YYYY-MM-DD
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return dateString;
+    }
+  };
+
   // If editing an existing project, populate the form
   useEffect(() => {
     if (project) {
+      console.log('Editing project with dates:', project.startDate, project.endDate);
+
       // Important: Transform role data from {id, name, count} to {roleId, name, count}
       const formattedRoles = project.requiredRoles ? project.requiredRoles.map(role => ({
         roleId: parseInt(role.id), // Map from id to roleId and ensure it's an integer
         count: parseInt(role.count) || 1, // Ensure count is an integer
         name: role.name
       })) : [];
-      
+
+      // Format dates for the date input
+      const formattedStartDate = formatDateForInput(project.startDate);
+      const formattedEndDate = formatDateForInput(project.endDate);
+
+      console.log('Original dates from API:', project.startDate, project.endDate);
+      console.log('Formatted dates for input:', formattedStartDate, formattedEndDate);
+
+      // Log the date objects for debugging timezone issues
+      if (project.startDate) {
+        const startDate = new Date(project.startDate);
+        console.log('Start date as Date object:', startDate);
+        console.log('Start date UTC parts:', {
+          year: startDate.getUTCFullYear(),
+          month: startDate.getUTCMonth() + 1,
+          day: startDate.getUTCDate()
+        });
+      }
+
       setFormData({
         name: project.name,
         client: project.client,
         description: project.description || '',
+        projectNumber: project.projectNumber || '',
+        projectOwner: project.projectOwner || '',
         requiredSkills: [...project.requiredSkills],
         skillInput: '',
         requiredRoles: formattedRoles,
         roleInput: { roleId: '', count: 1 },
-        startDate: project.startDate || '',
-        endDate: project.endDate || ''
+        startDate: formattedStartDate,
+        endDate: formattedEndDate
       });
     }
   }, [project]);
@@ -165,8 +212,12 @@ const ProjectForm = ({ project = null, onClose }) => {
       name: formData.name,
       client: formData.client,
       description: formData.description || null,
+      projectNumber: formData.projectNumber || null,
+      projectOwner: formData.projectOwner || null,
       requiredSkills: formData.requiredSkills,
       requiredRoles: formattedRoles,
+      // For dates, we pass them directly as YYYY-MM-DD strings
+      // The backend will parse them correctly without timezone issues
       startDate: formData.startDate || null,
       endDate: formData.endDate || null,
       status: 'Active' // Make sure status is included
@@ -237,6 +288,31 @@ const ProjectForm = ({ project = null, onClose }) => {
               placeholder="Enter project description"
               rows="3"
             ></textarea>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Project Number</label>
+              <input
+                type="text"
+                name="projectNumber"
+                value={formData.projectNumber}
+                onChange={handleChange}
+                className="w-full p-2 border border-gray-300 rounded"
+                placeholder="e.g., PRJ-2023-001"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Project Owner</label>
+              <input
+                type="text"
+                name="projectOwner"
+                value={formData.projectOwner}
+                onChange={handleChange}
+                className="w-full p-2 border border-gray-300 rounded"
+                placeholder="Enter project owner name"
+              />
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4 mb-4">

@@ -200,8 +200,18 @@ const ProjectDetail = ({ project }) => {
       <div className="p-6">
         <div className="flex justify-between items-start">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{project.name}</h2>
-            <p className="text-gray-600">Client: {project.client}</p>
+            <div className="flex items-center gap-3">
+              {project.projectNumber && (
+                <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">
+                  {project.projectNumber}
+                </span>
+              )}
+              <h2 className="text-2xl font-bold text-gray-900">{project.name}</h2>
+            </div>
+            <p className="text-gray-600 mt-1">Client: {project.client}</p>
+            {project.projectOwner && (
+              <p className="text-gray-600">Owner: {project.projectOwner}</p>
+            )}
           </div>
           <div className="flex space-x-2">
             {project.startDate && (

@@ -89,14 +89,16 @@ exports.getAllProjects = async (req, res) => {
     // Query projects with financial data
     const result = await pool.request()
       .query(`
-        SELECT 
-          p.ProjectID, 
-          p.Name, 
-          p.Client, 
+        SELECT
+          p.ProjectID,
+          p.Name,
+          p.Client,
           p.Description,
-          p.StartDate, 
-          p.EndDate, 
+          p.StartDate,
+          p.EndDate,
           p.Status,
+          p.ProjectNumber,
+          p.ProjectOwner,
           p.Budget,
           p.ActualCost,
           p.BudgetUtilization,
@@ -160,6 +162,8 @@ exports.getAllProjects = async (req, res) => {
         startDate: project.StartDate,
         endDate: project.EndDate,
         status: project.Status,
+        projectNumber: project.ProjectNumber,
+        projectOwner: project.ProjectOwner,
         requiredSkills: skillsResult.recordset.map(skill => skill.Name),
         requiredRoles: rolesResult.recordset.map(role => ({
           id: role.RoleID,
@@ -222,14 +226,16 @@ exports.getProjectById = async (req, res) => {
     const result = await pool.request()
       .input('projectId', sql.Int, id)
       .query(`
-        SELECT 
-          p.ProjectID, 
-          p.Name, 
-          p.Client, 
+        SELECT
+          p.ProjectID,
+          p.Name,
+          p.Client,
           p.Description,
-          p.StartDate, 
-          p.EndDate, 
+          p.StartDate,
+          p.EndDate,
           p.Status,
+          p.ProjectNumber,
+          p.ProjectOwner,
           p.Budget,
           p.ActualCost,
           p.BudgetUtilization,
@@ -341,6 +347,8 @@ exports.getProjectById = async (req, res) => {
       startDate: project.StartDate,
       endDate: project.EndDate,
       status: project.Status,
+      projectNumber: project.ProjectNumber,
+      projectOwner: project.ProjectOwner,
       requiredSkills: skillsResult.recordset.map(skill => skill.Name),
       requiredRoles: rolesResult.recordset.map(role => ({
         id: role.RoleID,
@@ -420,15 +428,18 @@ exports.createProject = async (req, res) => {
 
     // Proceed with regular database operations
     const pool = await poolPromise;
-    const { 
-      name, 
-      client, 
-      description, 
-      startDate, 
-      endDate, 
+    const {
+      name,
+      client,
+      description,
+      startDate,
+      endDate,
       status,
       requiredSkills,
       requiredRoles,
+      // New fields
+      projectNumber,
+      projectOwner,
       // Financial parameters
       budget,
       currency,
@@ -454,33 +465,39 @@ exports.createProject = async (req, res) => {
         .input('startDate', sql.Date, startDate ? new Date(startDate) : null)
         .input('endDate', sql.Date, endDate ? new Date(endDate) : null)
         .input('status', sql.NVarChar, status || 'Active')
+        .input('projectNumber', sql.NVarChar, projectNumber || null)
+        .input('projectOwner', sql.NVarChar, projectOwner || null)
         .input('budget', sql.Decimal(14, 2), budget || null)
         .input('currency', sql.NVarChar(3), currency || 'USD')
         .input('financialNotes', sql.NVarChar, financialNotes || null)
         .query(`
           INSERT INTO Projects (
-            Name, 
-            Client, 
-            Description, 
-            StartDate, 
-            EndDate, 
-            Status, 
-            Budget, 
-            Currency, 
+            Name,
+            Client,
+            Description,
+            StartDate,
+            EndDate,
+            Status,
+            ProjectNumber,
+            ProjectOwner,
+            Budget,
+            Currency,
             FinancialNotes,
             ActualCost,
             BudgetUtilization
           )
           OUTPUT INSERTED.ProjectID
           VALUES (
-            @name, 
-            @client, 
-            @description, 
-            @startDate, 
-            @endDate, 
-            @status, 
-            @budget, 
-            @currency, 
+            @name,
+            @client,
+            @description,
+            @startDate,
+            @endDate,
+            @status,
+            @projectNumber,
+            @projectOwner,
+            @budget,
+            @currency,
             @financialNotes,
             0,  -- Initial actual cost is 0
             0   -- Initial budget utilization is 0
@@ -683,14 +700,16 @@ exports.createProject = async (req, res) => {
       const result = await pool.request()
         .input('projectId', sql.Int, projectId)
         .query(`
-          SELECT 
-            p.ProjectID, 
-            p.Name, 
-            p.Client, 
+          SELECT
+            p.ProjectID,
+            p.Name,
+            p.Client,
             p.Description,
-            p.StartDate, 
-            p.EndDate, 
+            p.StartDate,
+            p.EndDate,
             p.Status,
+            p.ProjectNumber,
+            p.ProjectOwner,
             p.Budget,
             p.ActualCost,
             p.BudgetUtilization,
@@ -734,6 +753,8 @@ exports.createProject = async (req, res) => {
         startDate: project.StartDate,
         endDate: project.EndDate,
         status: project.Status,
+        projectNumber: project.ProjectNumber,
+        projectOwner: project.ProjectOwner,
         requiredSkills: skillsResult.recordset.map(skill => skill.Name),
         requiredRoles: rolesResult.recordset.map(role => ({
           id: role.RoleID,
@@ -800,15 +821,18 @@ exports.updateProject = async (req, res) => {
   try {
   const pool = await poolPromise;
   const { id } = req.params;
-  const { 
-      name, 
-      client, 
-      description, 
-      startDate, 
-      endDate, 
+  const {
+      name,
+      client,
+      description,
+      startDate,
+      endDate,
       status,
       requiredSkills,
       requiredRoles,
+      // New fields
+      projectNumber,
+      projectOwner,
       // Financial parameters
       budget,
       currency,
@@ -849,6 +873,8 @@ exports.updateProject = async (req, res) => {
       .input('startDate', sql.Date, startDate ? new Date(startDate) : null)
       .input('endDate', sql.Date, endDate ? new Date(endDate) : null)
       .input('status', sql.NVarChar, status || 'Active')
+      .input('projectNumber', sql.NVarChar, projectNumber || null)
+      .input('projectOwner', sql.NVarChar, projectOwner || null)
       .input('budget', sql.Decimal(14, 2), budget)
       .input('currency', sql.NVarChar(3), currency || 'USD')
       .input('financialNotes', sql.NVarChar, financialNotes || null)
@@ -861,6 +887,8 @@ exports.updateProject = async (req, res) => {
               StartDate = @startDate,
               EndDate = @endDate,
               Status = @status,
+              ProjectNumber = @projectNumber,
+              ProjectOwner = @projectOwner,
               UpdatedAt = @updatedAt,
               Budget = @budget,
               Currency = @currency,
@@ -1084,14 +1112,16 @@ exports.updateProject = async (req, res) => {
       const result = await pool.request()
         .input('projectId', sql.Int, id)
         .query(`
-          SELECT 
-            p.ProjectID, 
-            p.Name, 
-            p.Client, 
+          SELECT
+            p.ProjectID,
+            p.Name,
+            p.Client,
             p.Description,
-            p.StartDate, 
-            p.EndDate, 
+            p.StartDate,
+            p.EndDate,
             p.Status,
+            p.ProjectNumber,
+            p.ProjectOwner,
             p.Budget,
             p.ActualCost,
             p.BudgetUtilization,
@@ -1199,6 +1229,8 @@ exports.updateProject = async (req, res) => {
         startDate: project.StartDate,
         endDate: project.EndDate,
         status: project.Status,
+        projectNumber: project.ProjectNumber,
+        projectOwner: project.ProjectOwner,
         requiredSkills: skillsResult.recordset.map(skill => skill.Name),
         requiredRoles: rolesResult.recordset.map(role => ({
           id: role.RoleID,

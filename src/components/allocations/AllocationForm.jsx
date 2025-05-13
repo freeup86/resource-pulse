@@ -18,10 +18,16 @@ const AllocationForm = ({
   // Get system-configured max utilization threshold from settings directly
   const systemMaxUtilization = settings.maxUtilizationPercentage || 100;
   
+  // Create a properly formatted date string using our formatDateForInput helper
+  const getDefaultStartDate = () => {
+    const today = new Date();
+    return `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}`;
+  };
+
   const [formData, setFormData] = useState({
     resourceId: resourceId || '',
     projectId: projectId || '',
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: getDefaultStartDate(),
     endDate: '',
     utilization: settings.defaultAllocationPercentage || 100
   });
@@ -46,16 +52,16 @@ const AllocationForm = ({
   // Format date for input without adding a day
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
-    
+
     // Create a date object from the string
     const date = new Date(dateString);
-    
-    // Format the date as YYYY-MM-DD without adjusting the day
-    const year = date.getFullYear();
-    // getMonth() is 0-indexed, so add 1
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    
+
+    // Format the date as YYYY-MM-DD using UTC components to avoid timezone issues
+    const year = date.getUTCFullYear();
+    // getUTCMonth() is 0-indexed, so add 1
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+
     return `${year}-${month}-${day}`;
   };
 
@@ -65,7 +71,7 @@ const AllocationForm = ({
       setFormData({
         resourceId: resourceId || '',
         projectId: allocation.projectId || (allocation.project ? allocation.project.id : ''),
-        startDate: allocation.startDate ? formatDateForInput(allocation.startDate) : new Date().toISOString().split('T')[0],
+        startDate: allocation.startDate ? formatDateForInput(allocation.startDate) : getDefaultStartDate(),
         endDate: allocation.endDate ? formatDateForInput(allocation.endDate) : '',
         utilization: allocation.utilization || (settings.defaultAllocationPercentage || 100),
         id: allocation.id // Save the allocation ID for updates
@@ -90,9 +96,9 @@ const AllocationForm = ({
         setFormData(prev => ({
           ...prev,
           // Only update start date if project has one and form is empty or default
-          startDate: selectedProject.startDate && 
-            (!prev.startDate || prev.startDate === new Date().toISOString().split('T')[0]) ? 
-            formatDateForInput(selectedProject.startDate) : 
+          startDate: selectedProject.startDate &&
+            (!prev.startDate || prev.startDate === getDefaultStartDate()) ?
+            formatDateForInput(selectedProject.startDate) :
             prev.startDate,
           // Only update end date if project has one and form is empty
           endDate: selectedProject.endDate ? 
