@@ -101,15 +101,13 @@ const ResourceDetail = () => {
             <div className="flex flex-wrap gap-2 mt-2">
               {resource.skills.map((skill, idx) => {
                 // Find the skill object to get additional info if available
-                const skillObj = typeof skill === 'string' 
-                  ? skills.find(s => s.name === skill) 
-                  : skills.find(s => s.name === skill.name);
-                
+                let skillName = typeof skill === 'string' ? skill : skill.name;
+                const skillObj = skills.find(s => s.name === skillName);
+
                 return (
-                  <SkillTag 
-                    key={`skill-${idx}`} 
-                    skill={typeof skill === 'string' ? skill : skill.name}
-                    proficiency={typeof skill === 'object' ? skill.proficiencyLevel : null}
+                  <SkillTag
+                    key={`skill-${idx}`}
+                    skill={skill}
                     category={skillObj?.category}
                   />
                 );

@@ -171,9 +171,11 @@ const ResourceForm = ({ resource = null, onClose }) => {
       email: formData.email || null,
       phone: formData.phone || null,
       skills: formData.skills.map(skill => {
-        // Backend still expects string array for backward compatibility
-        // We'll update this when backend is ready for structured skills
-        return skill.name;
+        // Pass the complete skill object with proficiency level
+        return {
+          name: skill.name,
+          proficiencyLevel: skill.proficiencyLevel
+        };
       }),
       hourlyRate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : null,
       billableRate: formData.billableRate ? parseFloat(formData.billableRate) : null,

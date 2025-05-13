@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, Settings, Bell, Lightbulb } from 'lucide-react';
+import { Menu, Settings, Bell, Lightbulb, LogOut, User } from 'lucide-react';
 import NotificationCenter from '../notifications/NotificationCenter';
 import { getUnreadCount } from '../../services/notificationService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   const [isAiMenuOpen, setIsAiMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [notificationsCount, setNotificationsCount] = useState(0);
+  const { currentUser, logout } = useAuth();
   
   useEffect(() => {
     // Fetch unread notifications count
@@ -53,7 +56,6 @@ const Header = () => {
             <li><Link to="/resources" className="hover:underline">Resources</Link></li>
             <li><Link to="/projects" className="hover:underline">Projects</Link></li>
             <li><Link to="/timeline" className="hover:underline">Timeline</Link></li>
-            <li><Link to="/analytics" className="hover:underline">Analytics</Link></li>
           </ul>
           
           {/* AI Features dropdown */}
@@ -142,10 +144,10 @@ const Header = () => {
               </div>
             )}
           </div>
-          
+
           {/* Admin dropdown */}
           <div className="relative ml-2">
-            <button 
+            <button
               className="flex items-center hover:underline"
               onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
             >
@@ -193,6 +195,45 @@ const Header = () => {
               </div>
             )}
           </div>
+
+          {/* User dropdown */}
+          <div className="relative ml-2">
+            <button
+              className="flex items-center hover:underline"
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            >
+              <User className="h-5 w-5 mr-1" />
+              <span>{currentUser?.username || 'User'}</span>
+            </button>
+
+            {isUserMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white text-gray-800 rounded shadow-lg z-10">
+                <div className="px-4 py-2 text-gray-600 border-b">
+                  <div className="font-medium">{currentUser?.firstName || ''} {currentUser?.lastName || ''}</div>
+                  <div className="text-xs text-gray-500">{currentUser?.email || ''}</div>
+                </div>
+                <Link
+                  to="/profile"
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsUserMenuOpen(false)}
+                >
+                  Profile
+                </Link>
+                <button
+                  onClick={() => {
+                    logout();
+                    setIsUserMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-4 py-2 hover:bg-blue-100 text-red-600"
+                >
+                  <div className="flex items-center">
+                    <LogOut className="h-4 w-4 mr-1" />
+                    <span>Logout</span>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </nav>
         
         {/* Mobile Navigation */}
@@ -234,15 +275,6 @@ const Header = () => {
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Timeline
-                  </Link>
-                </li>
-                <li>
-                  <Link 
-                    to="/analytics" 
-                    className="block p-2 hover:bg-blue-700 rounded"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Analytics
                   </Link>
                 </li>
                 
@@ -379,6 +411,40 @@ const Header = () => {
                       </span>
                     )}
                   </Link>
+                </li>
+
+                {/* User/Logout for mobile */}
+                <li className="pt-2 pb-1 px-2 text-gray-200 font-medium">
+                  User
+                </li>
+                <li>
+                  <div className="p-2 text-gray-200">
+                    <div>{currentUser?.firstName || ''} {currentUser?.lastName || ''}</div>
+                    <div className="text-xs text-gray-300">{currentUser?.email || ''}</div>
+                  </div>
+                </li>
+                <li>
+                  <Link
+                    to="/profile"
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Profile
+                  </Link>
+                </li>
+                <li>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setIsMenuOpen(false);
+                    }}
+                    className="block w-full text-left p-2 hover:bg-blue-700 rounded ml-2 text-red-300"
+                  >
+                    <div className="flex items-center">
+                      <LogOut className="h-4 w-4 mr-2" />
+                      <span>Logout</span>
+                    </div>
+                  </button>
                 </li>
               </ul>
             </nav>

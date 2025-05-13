@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import AppProvider from './contexts/AppProvider';
 import { SkillsProvider } from './contexts/SkillsContext';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 import MainLayout from './components/layout/MainLayout';
 import Dashboard from './components/Dashboard';
 import ResourcesPage from './components/resources/ResourcesPage';
@@ -32,49 +34,86 @@ import SkillsGapPage from './components/ai-features/skills-gap/SkillsGapPage';
 import DocumentProcessingPage from './components/ai-features/document-processor/DocumentProcessingPage';
 import ClientSatisfactionPage from './components/ai-features/satisfaction/ClientSatisfactionPage';
 
+// Auth Components
+import LoginPage from './components/auth/LoginPage';
+import RegisterPage from './components/auth/RegisterPage';
+import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
+import ResetPasswordPage from './components/auth/ResetPasswordPage';
+import ProfilePage from './components/auth/ProfilePage';
+
 import './App.css';
 
 function App() {
   return (
-    <AppProvider>
-      <SkillsProvider>
-        <Router>
-          <MainLayout>
+    <Router>
+      <AuthProvider>
+        <AppProvider>
+          <SkillsProvider>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/resources" element={<ResourcesPage />} />
-              <Route path="/resources/:id" element={<ResourceDetailPage />} />
-              <Route path="/projects" element={<ProjectsPage />} />
-              <Route path="/projects/:id" element={<ProjectDetailPage />} />
-              <Route path="/allocations" element={<AllocationsPage />} />
-              <Route path="/ending-soon" element={<EndingSoonPage />} />
-              <Route path="/matches" element={<MatchesPage />} />
-              <Route path="/timeline" element={<TimelinePage />} />
-              <Route path="/capacity" element={<CapacityPlanningPage />} />
-              <Route path="/admin/roles" element={<RolesPage />} />
-              <Route path="/admin/import" element={<ImportPage />} />
-              <Route path="/admin/export" element={<ExportPage />} />
-              <Route path="/admin/sync" element={<SyncPage />} />
-              <Route path="/admin/settings" element={<SettingsPage />} />
-              <Route path="/analytics" element={<AnalyticsDashboard />} />
-              <Route path="/notifications/settings" element={<NotificationSettingsPage />} />
-              <Route path="/notifications/:id" element={<NotificationPage />} />
-              <Route path="/notifications" element={<NotificationsListPage />} />
-              
-              {/* AI Features Routes */}
-              <Route path="/ai/forecast" element={<UtilizationForecastPage />} />
-              <Route path="/ai/risk" element={<ProjectRiskPage />} />
-              <Route path="/ai/search" element={<NaturalLanguageSearchPage />} />
-              <Route path="/ai/finance" element={<FinancialOptimizationPage />} />
-              <Route path="/ai/finance/test" element={<DataFixTest />} />
-              <Route path="/ai/skills" element={<SkillsGapPage />} />
-              <Route path="/ai/documents" element={<DocumentProcessingPage />} />
-              <Route path="/ai/satisfaction" element={<ClientSatisfactionPage />} />
+              {/* Public routes */}
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+              {/* Protected routes */}
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Dashboard />
+                    </MainLayout>
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* All other protected routes */}
+              <Route
+                path="/*"
+                element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <Routes>
+                        <Route path="/resources" element={<ResourcesPage />} />
+                        <Route path="/resources/:id" element={<ResourceDetailPage />} />
+                        <Route path="/projects" element={<ProjectsPage />} />
+                        <Route path="/projects/:id" element={<ProjectDetailPage />} />
+                        <Route path="/allocations" element={<AllocationsPage />} />
+                        <Route path="/ending-soon" element={<EndingSoonPage />} />
+                        <Route path="/matches" element={<MatchesPage />} />
+                        <Route path="/timeline" element={<TimelinePage />} />
+                        <Route path="/capacity" element={<CapacityPlanningPage />} />
+                        <Route path="/admin/roles" element={<RolesPage />} />
+                        <Route path="/admin/import" element={<ImportPage />} />
+                        <Route path="/admin/export" element={<ExportPage />} />
+                        <Route path="/admin/sync" element={<SyncPage />} />
+                        <Route path="/admin/settings" element={<SettingsPage />} />
+                        <Route path="/analytics" element={<AnalyticsDashboard />} />
+                        <Route path="/notifications/settings" element={<NotificationSettingsPage />} />
+                        <Route path="/notifications/:id" element={<NotificationPage />} />
+                        <Route path="/notifications" element={<NotificationsListPage />} />
+                        <Route path="/profile" element={<ProfilePage />} />
+
+                        {/* AI Features Routes */}
+                        <Route path="/ai/forecast" element={<UtilizationForecastPage />} />
+                        <Route path="/ai/risk" element={<ProjectRiskPage />} />
+                        <Route path="/ai/search" element={<NaturalLanguageSearchPage />} />
+                        <Route path="/ai/finance" element={<FinancialOptimizationPage />} />
+                        <Route path="/ai/finance/test" element={<DataFixTest />} />
+                        <Route path="/ai/skills" element={<SkillsGapPage />} />
+                        <Route path="/ai/documents" element={<DocumentProcessingPage />} />
+                        <Route path="/ai/satisfaction" element={<ClientSatisfactionPage />} />
+                      </Routes>
+                    </MainLayout>
+                  </ProtectedRoute>
+                }
+              />
             </Routes>
-          </MainLayout>
-        </Router>
-      </SkillsProvider>
-    </AppProvider>
+          </SkillsProvider>
+        </AppProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 

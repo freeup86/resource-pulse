@@ -1,6 +1,16 @@
 import React from 'react';
 
 const SkillTag = ({ skill, proficiency, category, onClick }) => {
+  // Extract skill name and proficiency if skill is an object
+  let skillName = skill;
+  let skillProficiency = proficiency;
+  
+  if (typeof skill === 'object' && skill !== null) {
+    skillName = skill.name || '';
+    // Use provided proficiency or the one from the skill object
+    skillProficiency = proficiency || skill.proficiencyLevel;
+  }
+
   // Color mapping for proficiency levels
   const proficiencyColors = {
     Beginner: 'bg-blue-100 text-blue-800',
@@ -19,19 +29,23 @@ const SkillTag = ({ skill, proficiency, category, onClick }) => {
   };
 
   // Determine colors based on proficiency and category
-  const proficiencyColor = proficiency ? proficiencyColors[proficiency] : proficiencyColors.default;
+  const proficiencyColor = skillProficiency ? proficiencyColors[skillProficiency] : proficiencyColors.default;
   const categoryBorder = category ? categoryColors[category] : categoryColors.default;
 
   // Combine classes
   const classes = `px-2 py-1 text-xs rounded-full border ${proficiencyColor} ${categoryBorder} ${onClick ? 'cursor-pointer hover:shadow-sm' : ''}`;
 
+  // Get proficiency initial for display
+  const proficiencyInitial = skillProficiency ? skillProficiency.charAt(0) : '';
+
+
   return (
     <span 
       className={classes}
-      onClick={onClick ? () => onClick(skill) : null}
-      title={proficiency ? `${skill} - ${proficiency}` : skill}
+      onClick={onClick ? () => onClick(skillName) : null}
+      title={skillProficiency ? `${skillName} - ${skillProficiency}` : skillName}
     >
-      {skill}{proficiency && <span className="ml-1 font-semibold">[{proficiency.charAt(0)}]</span>}
+      {skillName}{skillProficiency && <span className="ml-1 font-semibold">[{proficiencyInitial}]</span>}
     </span>
   );
 };

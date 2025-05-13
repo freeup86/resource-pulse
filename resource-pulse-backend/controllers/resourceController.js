@@ -1,6 +1,26 @@
 const { poolPromise, sql } = require('../db/config');
 const { shouldUseMock, resourceService } = require('../mockDataService');
 
+// Utility function to format skills with proficiency levels
+const formatSkills = (skills) => {
+  console.log('Formatting skills:', JSON.stringify(skills, null, 2));
+
+  const formattedSkills = skills.map(skill => {
+    // Check if ProficiencyLevel property exists and has a value
+    if ('ProficiencyLevel' in skill && skill.ProficiencyLevel) {
+      console.log(`Skill ${skill.Name} has proficiency ${skill.ProficiencyLevel}`);
+      return {
+        name: skill.Name,
+        proficiencyLevel: skill.ProficiencyLevel
+      };
+    }
+    return skill.Name;
+  });
+
+  console.log('Formatted skills:', JSON.stringify(formattedSkills, null, 2));
+  return formattedSkills;
+};
+
 // Get all resources
 exports.getAllResources = async (req, res) => {
   try {
@@ -16,11 +36,12 @@ exports.getAllResources = async (req, res) => {
     // Query resources with financial info
     const result = await pool.request()
       .query(`
-        SELECT 
-          r.ResourceID, 
-          r.Name, 
-          r.Role, 
-          r.Email, 
+        SELECT
+          r.ResourceID,
+          r.Name,
+          r.Role,
+          r.RoleID,
+          r.Email,
           r.Phone,
           r.HourlyRate,
           r.BillableRate,
@@ -32,15 +53,35 @@ exports.getAllResources = async (req, res) => {
     
     // For each resource, get their skills and allocations
     const resources = await Promise.all(result.recordset.map(async resource => {
-      // Get skills
+      // Check if ProficiencyLevel column exists in ResourceSkills table
+      let hasProficiencyLevel = true;
+      try {
+        const columnCheckResult = await pool.request().query(`
+          SELECT 1 FROM sys.columns
+          WHERE object_id = OBJECT_ID('ResourceSkills')
+          AND name = 'ProficiencyLevel'
+        `);
+
+        hasProficiencyLevel = columnCheckResult.recordset.length > 0;
+      } catch (columnCheckError) {
+        console.warn('Error checking for ProficiencyLevel column:', columnCheckError.message);
+        hasProficiencyLevel = false;
+      }
+
+      // Get skills with proficiency levels if the column exists
+      let skillsQuery = hasProficiencyLevel ?
+        `SELECT s.SkillID, s.Name, rs.ProficiencyLevel
+         FROM Skills s
+         INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
+         WHERE rs.ResourceID = @resourceId` :
+        `SELECT s.SkillID, s.Name
+         FROM Skills s
+         INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
+         WHERE rs.ResourceID = @resourceId`;
+
       const skillsResult = await pool.request()
         .input('resourceId', sql.Int, resource.ResourceID)
-        .query(`
-          SELECT s.SkillID, s.Name
-          FROM Skills s
-          INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
-          WHERE rs.ResourceID = @resourceId
-        `);
+        .query(skillsQuery);
       
       // Get allocations - Modified to get ALL allocations with financial data
       const allocationsResult = await pool.request()
@@ -72,13 +113,14 @@ exports.getAllResources = async (req, res) => {
         id: resource.ResourceID,
         name: resource.Name,
         role: resource.Role,
+        roleId: resource.RoleID,
         email: resource.Email,
         phone: resource.Phone,
         hourlyRate: resource.HourlyRate,
         billableRate: resource.BillableRate,
         currency: resource.Currency || 'USD',
         costCenter: resource.CostCenter,
-        skills: skillsResult.recordset.map(skill => skill.Name),
+        skills: formatSkills(skillsResult.recordset),
         // Include ALL allocations as an array with financial data
         allocations: allocationsResult.recordset.map(alloc => ({
           id: alloc.AllocationID,
@@ -157,11 +199,12 @@ exports.getResourceById = async (req, res) => {
     const result = await pool.request()
       .input('resourceId', sql.Int, id)
       .query(`
-        SELECT 
-          r.ResourceID, 
-          r.Name, 
-          r.Role, 
-          r.Email, 
+        SELECT
+          r.ResourceID,
+          r.Name,
+          r.Role,
+          r.RoleID,
+          r.Email,
           r.Phone,
           r.HourlyRate,
           r.BillableRate,
@@ -181,7 +224,7 @@ exports.getResourceById = async (req, res) => {
     const skillsResult = await pool.request()
       .input('resourceId', sql.Int, resource.ResourceID)
       .query(`
-        SELECT s.SkillID, s.Name
+        SELECT s.SkillID, s.Name, rs.ProficiencyLevel
         FROM Skills s
         INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
         WHERE rs.ResourceID = @resourceId
@@ -241,13 +284,14 @@ exports.getResourceById = async (req, res) => {
       id: resource.ResourceID,
       name: resource.Name,
       role: resource.Role,
+      roleId: resource.RoleID,
       email: resource.Email,
       phone: resource.Phone,
       hourlyRate: resource.HourlyRate,
       billableRate: resource.BillableRate,
       currency: resource.Currency || 'USD',
       costCenter: resource.CostCenter,
-      skills: skillsResult.recordset.map(skill => skill.Name),
+      skills: formatSkills(skillsResult.recordset),
       // Include ALL allocations as an array with financial data
       allocations: allocationsResult.recordset.map(alloc => ({
         id: alloc.AllocationID,
@@ -414,18 +458,32 @@ exports.createResource = async (req, res) => {
       
       const resourceId = resourceResult.recordset[0].ResourceID;
       
-      // Process skills as before
+      // Process skills with proficiency levels
       if (skills && skills.length > 0) {
-        for (const skillName of skills) {
+        for (const skill of skills) {
+          // Handle both string skills and object skills with proficiency
+          let skillName, proficiencyLevel;
+
+          if (typeof skill === 'string') {
+            skillName = skill;
+            proficiencyLevel = null;
+          } else if (typeof skill === 'object' && skill.name) {
+            skillName = skill.name;
+            proficiencyLevel = skill.proficiencyLevel;
+          } else {
+            console.warn('Invalid skill format:', skill);
+            continue;
+          }
+
           // Check if skill exists
           const skillResult = await transaction.request()
             .input('skillName', sql.NVarChar, skillName)
             .query(`
               SELECT SkillID FROM Skills WHERE Name = @skillName
             `);
-          
+
           let skillId;
-          
+
           if (skillResult.recordset.length === 0) {
             // Create new skill
             const newSkillResult = await transaction.request()
@@ -435,19 +493,25 @@ exports.createResource = async (req, res) => {
                 OUTPUT INSERTED.SkillID
                 VALUES (@skillName)
               `);
-            
+
             skillId = newSkillResult.recordset[0].SkillID;
           } else {
             skillId = skillResult.recordset[0].SkillID;
           }
-          
-          // Link skill to resource
+
+          // Link skill to resource with proficiency level
+          console.log(`Adding skill ${skillName} with proficiency level ${proficiencyLevel}`);
+          // Make sure proficiencyLevel is a valid string or null to prevent SQL errors
+          const safeProficiencyLevel =
+            (proficiencyLevel && typeof proficiencyLevel === 'string') ? proficiencyLevel : null;
+
           await transaction.request()
             .input('resourceId', sql.Int, resourceId)
             .input('skillId', sql.Int, skillId)
+            .input('proficiencyLevel', sql.NVarChar, safeProficiencyLevel)
             .query(`
-              INSERT INTO ResourceSkills (ResourceID, SkillID)
-              VALUES (@resourceId, @skillId)
+              INSERT INTO ResourceSkills (ResourceID, SkillID, ProficiencyLevel)
+              VALUES (@resourceId, @skillId, @proficiencyLevel)
             `);
         }
       }
@@ -476,15 +540,35 @@ exports.createResource = async (req, res) => {
           WHERE r.ResourceID = @resourceId
         `);
       
-      // Get skills
+      // Check if ProficiencyLevel column exists in ResourceSkills table
+      let hasProficiencyLevel = true;
+      try {
+        const columnCheckResult = await pool.request().query(`
+          SELECT 1 FROM sys.columns
+          WHERE object_id = OBJECT_ID('ResourceSkills')
+          AND name = 'ProficiencyLevel'
+        `);
+
+        hasProficiencyLevel = columnCheckResult.recordset.length > 0;
+      } catch (columnCheckError) {
+        console.warn('Error checking for ProficiencyLevel column:', columnCheckError.message);
+        hasProficiencyLevel = false;
+      }
+
+      // Get skills with proficiency levels if the column exists
+      let skillsQuery = hasProficiencyLevel ?
+        `SELECT s.SkillID, s.Name, rs.ProficiencyLevel
+         FROM Skills s
+         INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
+         WHERE rs.ResourceID = @resourceId` :
+        `SELECT s.SkillID, s.Name
+         FROM Skills s
+         INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
+         WHERE rs.ResourceID = @resourceId`;
+
       const skillsResult = await pool.request()
         .input('resourceId', sql.Int, resourceId)
-        .query(`
-          SELECT s.SkillID, s.Name
-          FROM Skills s
-          INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
-          WHERE rs.ResourceID = @resourceId
-        `);
+        .query(skillsQuery);
       
       // Format the response
       const resource = result.recordset[0];
@@ -500,7 +584,7 @@ exports.createResource = async (req, res) => {
         billableRate: resource.BillableRate,
         currency: resource.Currency,
         costCenter: resource.CostCenter,
-        skills: skillsResult.recordset.map(skill => skill.Name),
+        skills: formatSkills(skillsResult.recordset),
         allocation: null
       };
       
@@ -644,18 +728,38 @@ exports.updateResource = async (req, res) => {
             WHERE ResourceID = @resourceId
           `);
         
-        // Add new skills
+        // Add new skills with proficiency levels
         if (skills && skills.length > 0) {
-          for (const skillName of skills) {
+          for (const skill of skills) {
+            // Handle both string skills and object skills with proficiency
+            let skillName, proficiencyLevel;
+
+            if (typeof skill === 'string') {
+              skillName = skill;
+              proficiencyLevel = null;
+            } else if (typeof skill === 'object' && skill.name) {
+              skillName = skill.name;
+              proficiencyLevel = skill.proficiencyLevel;
+            } else {
+              console.warn('Invalid skill format:', skill);
+              continue;
+            }
+
+            // Validate skillName to prevent SQL errors
+            if (!skillName || typeof skillName !== 'string') {
+              console.warn('Invalid skill name:', skillName);
+              continue;
+            }
+
             // Check if skill exists
             const skillResult = await transaction.request()
               .input('skillName', sql.NVarChar, skillName)
               .query(`
                 SELECT SkillID FROM Skills WHERE Name = @skillName
               `);
-            
+
             let skillId;
-            
+
             if (skillResult.recordset.length === 0) {
               // Create new skill
               const newSkillResult = await transaction.request()
@@ -665,19 +769,27 @@ exports.updateResource = async (req, res) => {
                   OUTPUT INSERTED.SkillID
                   VALUES (@skillName)
                 `);
-              
+
               skillId = newSkillResult.recordset[0].SkillID;
             } else {
               skillId = skillResult.recordset[0].SkillID;
             }
-            
-            // Link skill to resource
+
+            // Make sure proficiencyLevel is a valid string or null to prevent SQL errors
+            const safeProficiencyLevel =
+              (proficiencyLevel && typeof proficiencyLevel === 'string') ? proficiencyLevel : null;
+
+            // Log what we're doing
+            console.log(`Updating skill ${skillName} with proficiency level ${safeProficiencyLevel}`);
+
+            // Link skill to resource with proficiency level
             await transaction.request()
               .input('resourceId', sql.Int, id)
               .input('skillId', sql.Int, skillId)
+              .input('proficiencyLevel', sql.NVarChar, safeProficiencyLevel)
               .query(`
-                INSERT INTO ResourceSkills (ResourceID, SkillID)
-                VALUES (@resourceId, @skillId)
+                INSERT INTO ResourceSkills (ResourceID, SkillID, ProficiencyLevel)
+                VALUES (@resourceId, @skillId, @proficiencyLevel)
               `);
           }
         }
@@ -726,11 +838,11 @@ exports.updateResource = async (req, res) => {
           WHERE r.ResourceID = @resourceId
         `);
       
-      // Get skills
+      // Get skills with proficiency levels
       const skillsResult = await pool.request()
         .input('resourceId', sql.Int, id)
         .query(`
-          SELECT s.SkillID, s.Name
+          SELECT s.SkillID, s.Name, rs.ProficiencyLevel
           FROM Skills s
           INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
           WHERE rs.ResourceID = @resourceId
@@ -775,7 +887,7 @@ exports.updateResource = async (req, res) => {
         billableRate: resource.BillableRate,
         currency: resource.Currency,
         costCenter: resource.CostCenter,
-        skills: skillsResult.recordset.map(skill => skill.Name),
+        skills: formatSkills(skillsResult.recordset),
         allocation: allocationResult.recordset.length > 0 ? {
           projectId: allocationResult.recordset[0].ProjectID,
           projectName: allocationResult.recordset[0].ProjectName,

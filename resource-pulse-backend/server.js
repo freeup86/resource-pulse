@@ -31,6 +31,7 @@ const financialOptimizationRoutes = require('./routes/financialOptimizationRoute
 const skillsGapRoutes = require('./routes/skillsGapRoutes');  // Skills gap analysis routes
 const documentProcessingRoutes = require('./routes/documentProcessingRoutes');  // Document processing routes
 const clientSatisfactionRoutes = require('./routes/clientSatisfactionRoutes');  // Client satisfaction prediction routes
+const authRoutes = require('./routes/authRoutes');  // Authentication routes
 const scheduledSyncService = require('./services/scheduledSyncService');
 const settingsController = require('./controllers/settingsController');
 const notificationService = require('./services/notificationService');
@@ -201,6 +202,7 @@ app.get('/', (req, res) => {
 });
 
 // Routes
+app.use('/api/auth', authRoutes);  // Authentication routes (public)
 app.use('/api/resources', resourceRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/allocations', allocationRoutes);
@@ -229,6 +231,48 @@ try {
   settingsController.initializeSettings();
 } catch (err) {
   console.error('Error initializing settings:', err.message);
+}
+
+// Initialize authentication tables
+try {
+  const { initAuthTables } = require('./db/init-auth-tables');
+
+  // Retry logic for authentication tables initialization
+  let retries = 0;
+  const maxRetries = 3;
+
+  const initAuth = async () => {
+    try {
+      const success = await initAuthTables();
+      if (success) {
+        console.log('Authentication tables initialized successfully');
+      } else if (retries < maxRetries) {
+        retries++;
+        console.log(`Retrying authentication tables initialization (attempt ${retries}/${maxRetries})...`);
+        // Wait for 3 seconds before retrying
+        setTimeout(initAuth, 3000);
+      } else {
+        console.error('Failed to initialize authentication tables after multiple attempts');
+        console.warn('Authentication features may not work correctly - please check database configuration');
+      }
+    } catch (initErr) {
+      console.error('Error in authentication tables initialization:', initErr.message);
+      if (retries < maxRetries) {
+        retries++;
+        console.log(`Retrying authentication tables initialization (attempt ${retries}/${maxRetries})...`);
+        // Wait for 3 seconds before retrying
+        setTimeout(initAuth, 3000);
+      } else {
+        console.error('Failed to initialize authentication tables after multiple attempts');
+        console.warn('Authentication features may not work correctly - please check database configuration');
+      }
+    }
+  };
+
+  // Start the initialization process
+  initAuth();
+} catch (err) {
+  console.error('Failed to load authentication tables initialization module:', err.message);
 }
 
 // Initialize notification service
