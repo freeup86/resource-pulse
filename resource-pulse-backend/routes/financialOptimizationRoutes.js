@@ -15,6 +15,9 @@ router.get('/cost-revenue', financialOptimizationController.getCostRevenueAnalys
 // Get optimization recommendations
 router.get('/optimization', financialOptimizationController.generateOptimizedAllocations);
 
+// Get optimization scenarios
+router.get('/scenarios', financialOptimizationController.generateOptimizedAllocations);
+
 // Apply optimization recommendations
 router.post('/optimization/apply', financialOptimizationController.applyOptimizations);
 

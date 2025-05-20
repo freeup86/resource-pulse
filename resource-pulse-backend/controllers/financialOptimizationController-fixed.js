@@ -35,9 +35,9 @@ const generateOptimizedAllocations = async (req, res) => {
       // Get database connection
       const pool = await poolPromise;
       
-      // Get projects with financial data
+      // Get projects with financial data and resource allocations
       const projectsQuery = `
-        SELECT TOP 10
+        SELECT TOP 20
           p.ProjectID as id,
           p.Name as name,
           p.Client as client,
@@ -45,8 +45,12 @@ const generateOptimizedAllocations = async (req, res) => {
           p.StartDate as startDate,
           p.EndDate as endDate,
           p.Budget as budget,
-          p.ActualCost as actualCost
+          p.ActualCost as actualCost,
+          COUNT(a.AllocationID) as resourceCount,
+          AVG(a.Percentage) as avgAllocation
         FROM Projects p
+        LEFT JOIN Allocations a ON p.ProjectID = a.ProjectID
+        GROUP BY p.ProjectID, p.Name, p.Client, p.Status, p.StartDate, p.EndDate, p.Budget, p.ActualCost
         ORDER BY p.Name
       `;
       
@@ -60,52 +64,121 @@ const generateOptimizedAllocations = async (req, res) => {
         throw new Error('No projects found for optimization');
       }
 
-      // Generate sample recommendations based on real projects
+      // Get resource allocation data for better optimization recommendations
+      const allocationsQuery = `
+        SELECT TOP 50
+          a.AllocationID,
+          a.ResourceID,
+          a.ProjectID,
+          a.Percentage,
+          a.StartDate,
+          a.EndDate,
+          r.Name as resourceName,
+          r.Role as resourceRole,
+          p.Name as projectName,
+          p.Budget as projectBudget,
+          p.ActualCost as projectActualCost
+        FROM Allocations a
+        JOIN Resources r ON a.ResourceID = r.ResourceID
+        JOIN Projects p ON a.ProjectID = p.ProjectID
+        WHERE a.EndDate >= GETDATE() OR a.EndDate IS NULL
+        ORDER BY a.Percentage DESC
+      `;
+
+      const allocationsResult = await pool.request().query(allocationsQuery);
+      const allocations = allocationsResult.recordset || [];
+
+      console.log(`Found ${allocations.length} current allocations for optimization`);
+
+      // Generate recommendations based on real projects and allocations
       const recommendations = [];
       
       for (const project of projects) {
-        // Skip projects without budget or actualCost
-        if (!project.budget || !project.actualCost) continue;
+        const projectAllocations = allocations.filter(a => a.ProjectID === project.id);
+        const totalAllocation = projectAllocations.reduce((sum, a) => sum + (a.Percentage || 0), 0);
         
         // Check if project is over budget
-        const budgetUtilization = (project.actualCost / project.budget) * 100;
-        
-        if (budgetUtilization > 100) {
-          recommendations.push({
-            type: 'budget_adjustment',
-            projectId: project.id,
-            projectName: project.name,
-            client: project.client,
-            description: `Project is over budget (${budgetUtilization.toFixed(0)}% utilized)`,
-            impact: 'high',
-            suggestedAction: 'Increase project budget to cover actual costs',
-            financialImpact: {
-              currentBudget: project.budget,
-              actualCost: project.actualCost,
-              deficit: project.actualCost - project.budget,
-              suggestedBudget: Math.ceil(project.actualCost * 1.1) // Add 10% buffer
-            }
-          });
+        if (project.budget && project.actualCost) {
+          const budgetUtilization = (project.actualCost / project.budget) * 100;
+          
+          if (budgetUtilization > 100) {
+            recommendations.push({
+              type: 'budget_adjustment',
+              projectId: project.id,
+              projectName: project.name,
+              client: project.client,
+              description: `Project is over budget (${budgetUtilization.toFixed(0)}% utilized)`,
+              impact: 'high',
+              suggestedAction: 'Increase project budget to cover actual costs',
+              resourceCount: projectAllocations.length,
+              totalAllocation: totalAllocation,
+              financialImpact: {
+                currentBudget: project.budget,
+                actualCost: project.actualCost,
+                deficit: project.actualCost - project.budget,
+                suggestedBudget: Math.ceil(project.actualCost * 1.1) // Add 10% buffer
+              }
+            });
+          }
+          
+          // Check if project utilization is low
+          if (budgetUtilization < 50) {
+            recommendations.push({
+              type: 'resource_reallocation',
+              projectId: project.id,
+              projectName: project.name,
+              client: project.client,
+              description: `Project is significantly under budget (${budgetUtilization.toFixed(0)}% utilized)`,
+              impact: 'medium',
+              suggestedAction: 'Reallocate resources to other projects or reduce budget',
+              resourceCount: projectAllocations.length,
+              totalAllocation: totalAllocation,
+              financialImpact: {
+                currentBudget: project.budget,
+                actualCost: project.actualCost,
+                surplus: project.budget - project.actualCost,
+                potentialSavings: project.budget * 0.2 // 20% potential savings
+              }
+            });
+          }
         }
-        
-        // Check if project utilization is low
-        if (budgetUtilization < 50) {
-          recommendations.push({
-            type: 'resource_reallocation',
-            projectId: project.id,
-            projectName: project.name,
-            client: project.client,
-            description: `Project is significantly under budget (${budgetUtilization.toFixed(0)}% utilized)`,
-            impact: 'medium',
-            suggestedAction: 'Reallocate resources to other projects or reduce budget',
-            financialImpact: {
-              currentBudget: project.budget,
-              actualCost: project.actualCost,
-              surplus: project.budget - project.actualCost,
-              potentialSavings: project.budget * 0.2 // 20% potential savings
-            }
-          });
-        }
+
+        // Check for over-allocation (total allocation > 100% per resource)
+        const resourceAllocationMap = {};
+        projectAllocations.forEach(allocation => {
+          if (!resourceAllocationMap[allocation.ResourceID]) {
+            resourceAllocationMap[allocation.ResourceID] = {
+              resourceName: allocation.resourceName,
+              resourceRole: allocation.resourceRole,
+              totalAllocation: 0,
+              projectCount: 0
+            };
+          }
+          resourceAllocationMap[allocation.ResourceID].totalAllocation += allocation.Percentage || 0;
+          resourceAllocationMap[allocation.ResourceID].projectCount += 1;
+        });
+
+        // Find over-allocated resources
+        Object.entries(resourceAllocationMap).forEach(([resourceId, resourceData]) => {
+          if (resourceData.totalAllocation > 100) {
+            recommendations.push({
+              type: 'over_allocation',
+              projectId: project.id,
+              projectName: project.name,
+              resourceId: parseInt(resourceId),
+              resourceName: resourceData.resourceName,
+              resourceRole: resourceData.resourceRole,
+              description: `${resourceData.resourceName} is over-allocated (${resourceData.totalAllocation.toFixed(0)}% across ${resourceData.projectCount} projects)`,
+              impact: 'high',
+              suggestedAction: 'Reduce allocation percentage or redistribute to other resources',
+              financialImpact: {
+                currentAllocation: resourceData.totalAllocation,
+                overAllocation: resourceData.totalAllocation - 100,
+                affectedProjects: resourceData.projectCount
+              }
+            });
+          }
+        });
       }
       
       // Generate sample AI insights
@@ -256,7 +329,7 @@ const getCostRevenueAnalysis = async (req, res) => {
       // Get database connection
       const pool = await poolPromise;
       
-      // Get projects with financial data
+      // Get projects with financial data and resource information
       const projectsQuery = `
         SELECT TOP 20
           p.ProjectID as id,
@@ -266,13 +339,23 @@ const getCostRevenueAnalysis = async (req, res) => {
           p.StartDate as startDate,
           p.EndDate as endDate,
           p.Budget as budget,
-          p.ActualCost as actualCost
+          p.ActualCost as actualCost,
+          COUNT(DISTINCT a.ResourceID) as resourceCount,
+          AVG(a.Percentage) as avgAllocation,
+          SUM(a.Percentage) as totalAllocation
         FROM Projects p
+        LEFT JOIN Allocations a ON p.ProjectID = a.ProjectID
+        WHERE (p.StartDate >= @startDate OR @startDate IS NULL)
+          AND (p.EndDate <= @endDate OR @endDate IS NULL)
+        GROUP BY p.ProjectID, p.Name, p.Client, p.Status, p.StartDate, p.EndDate, p.Budget, p.ActualCost
         ORDER BY p.Name
       `;
       
       console.log('Running projects query:', projectsQuery);
-      const projectsResult = await pool.request().query(projectsQuery);
+      const projectsResult = await pool.request()
+        .input('startDate', startDate)
+        .input('endDate', endDate)
+        .query(projectsQuery);
       const dbProjects = projectsResult.recordset;
       
       console.log(`Found ${dbProjects.length} projects in database`);
