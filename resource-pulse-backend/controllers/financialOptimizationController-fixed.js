@@ -14,12 +14,18 @@ const generateOptimizedAllocations = async (req, res) => {
       timeRange: req.query.timeRange || '3months',
       optimizationGoal: req.query.optimizationTarget || req.query.optimizationGoal || 'profit',
       departmentId: req.query.departmentId,
-      projectConstraints: req.query.projectIds || req.query.projectConstraints 
-        ? (req.query.projectIds || req.query.projectConstraints).split(',') 
-        : [],
-      resourceConstraints: req.query.resourceConstraints 
-        ? req.query.resourceConstraints.split(',') 
-        : [],
+      projectConstraints: (() => {
+        const projectData = req.query.projectIds || req.query.projectConstraints;
+        if (!projectData) return [];
+        if (Array.isArray(projectData)) return projectData;
+        return projectData.split(',');
+      })(),
+      resourceConstraints: (() => {
+        const resourceData = req.query.resourceConstraints;
+        if (!resourceData) return [];
+        if (Array.isArray(resourceData)) return resourceData;
+        return resourceData.split(',');
+      })(),
       includeAIInsights: req.query.includeAIInsights !== 'false'
     };
 
@@ -47,15 +53,20 @@ const generateOptimizedAllocations = async (req, res) => {
           p.Budget as budget,
           p.ActualCost as actualCost,
           COUNT(a.AllocationID) as resourceCount,
-          AVG(a.Percentage) as avgAllocation
+          AVG(a.Utilization) as avgAllocation
         FROM Projects p
         LEFT JOIN Allocations a ON p.ProjectID = a.ProjectID
+        WHERE (@startDate IS NULL OR @endDate IS NULL OR 
+               (p.StartDate <= @endDate AND (p.EndDate >= @startDate OR p.EndDate IS NULL)))
         GROUP BY p.ProjectID, p.Name, p.Client, p.Status, p.StartDate, p.EndDate, p.Budget, p.ActualCost
         ORDER BY p.Name
       `;
       
       console.log('Running projects query for optimization:', projectsQuery);
-      const projectsResult = await pool.request().query(projectsQuery);
+      const projectsResult = await pool.request()
+        .input('startDate', options.startDate)
+        .input('endDate', options.endDate)
+        .query(projectsQuery);
       const projects = projectsResult.recordset;
       
       console.log(`Found ${projects.length} projects for optimization`);
@@ -87,7 +98,7 @@ const generateOptimizedAllocations = async (req, res) => {
           a.AllocationID,
           a.ResourceID,
           a.ProjectID,
-          a.Percentage,
+          a.Utilization,
           a.StartDate,
           a.EndDate,
           r.Name as resourceName,
@@ -99,7 +110,7 @@ const generateOptimizedAllocations = async (req, res) => {
         JOIN Resources r ON a.ResourceID = r.ResourceID
         JOIN Projects p ON a.ProjectID = p.ProjectID
         WHERE a.EndDate >= GETDATE() OR a.EndDate IS NULL
-        ORDER BY a.Percentage DESC
+        ORDER BY a.Utilization DESC
       `;
 
       const allocationsResult = await pool.request().query(allocationsQuery);
@@ -112,7 +123,7 @@ const generateOptimizedAllocations = async (req, res) => {
       
       for (const project of projects) {
         const projectAllocations = allocations.filter(a => a.ProjectID === project.id);
-        const totalAllocation = projectAllocations.reduce((sum, a) => sum + (a.Percentage || 0), 0);
+        const totalAllocation = projectAllocations.reduce((sum, a) => sum + (a.Utilization || 0), 0);
         
         // Check if project is over budget
         if (project.budget && project.actualCost) {
@@ -171,7 +182,7 @@ const generateOptimizedAllocations = async (req, res) => {
               projectCount: 0
             };
           }
-          resourceAllocationMap[allocation.ResourceID].totalAllocation += allocation.Percentage || 0;
+          resourceAllocationMap[allocation.ResourceID].totalAllocation += allocation.Utilization || 0;
           resourceAllocationMap[allocation.ResourceID].projectCount += 1;
         });
 
@@ -295,7 +306,12 @@ const getCostRevenueAnalysis = async (req, res) => {
     // Parse parameters
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
-    const projectIds = req.query.projectIds ? req.query.projectIds.split(',') : [];
+    const projectIds = (() => {
+      const projectData = req.query.projectIds;
+      if (!projectData) return [];
+      if (Array.isArray(projectData)) return projectData;
+      return projectData.split(',');
+    })();
     
     console.log(`Parameters: startDate=${startDate}, endDate=${endDate}, projectIds=${projectIds.join(',') || 'all'}`);
     
@@ -315,12 +331,12 @@ const getCostRevenueAnalysis = async (req, res) => {
           p.Budget as budget,
           p.ActualCost as actualCost,
           COUNT(DISTINCT a.ResourceID) as resourceCount,
-          AVG(a.Percentage) as avgAllocation,
-          SUM(a.Percentage) as totalAllocation
+          AVG(a.Utilization) as avgAllocation,
+          SUM(a.Utilization) as totalAllocation
         FROM Projects p
         LEFT JOIN Allocations a ON p.ProjectID = a.ProjectID
-        WHERE (p.StartDate >= @startDate OR @startDate IS NULL)
-          AND (p.EndDate <= @endDate OR @endDate IS NULL)
+        WHERE (@startDate IS NULL OR @endDate IS NULL OR 
+               (p.StartDate <= @endDate AND (p.EndDate >= @startDate OR p.EndDate IS NULL)))
         GROUP BY p.ProjectID, p.Name, p.Client, p.Status, p.StartDate, p.EndDate, p.Budget, p.ActualCost
         ORDER BY p.Name
       `;
