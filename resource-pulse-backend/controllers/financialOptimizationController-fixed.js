@@ -421,9 +421,9 @@ const getCostRevenueAnalysis = async (req, res) => {
       });
       
       // Calculate summary totals
-      const totalRevenue = projects.reduce((sum, project) => sum + project.revenue, 0);
-      const totalCost = projects.reduce((sum, project) => sum + project.cost, 0);
-      const totalProfit = totalRevenue - totalCost;
+      const totalRevenue = projects.reduce((sum, project) => sum + (project.estimatedRevenue || project.revenue), 0);
+      const totalCost = projects.reduce((sum, project) => sum + (project.actualCost || project.cost), 0);
+      const totalProfit = projects.reduce((sum, project) => sum + project.profit, 0); // Sum individual project profits
       const profitMargin = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
       
       // Generate monthly time series data for chart
@@ -559,7 +559,7 @@ const getCostRevenueAnalysis = async (req, res) => {
       // Calculate summary totals
       const totalRevenue = fallbackProjects.reduce((sum, project) => sum + project.revenue, 0);
       const totalCost = fallbackProjects.reduce((sum, project) => sum + project.cost, 0);
-      const totalProfit = totalRevenue - totalCost;
+      const totalProfit = fallbackProjects.reduce((sum, project) => sum + project.profit, 0); // Sum individual project profits
       const profitMargin = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
       
       // Generate monthly time series data for chart
