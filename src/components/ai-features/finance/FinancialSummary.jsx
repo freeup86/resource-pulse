@@ -22,17 +22,12 @@ const FinancialSummary = ({ data, onProjectSelection, selectedProjects }) => {
   console.log('Financial data received:', data);
   const projects = Array.isArray(data.projects) ? data.projects : [];
   
-  // Sort projects by budget variance (most over budget first, as these need attention)
+  // Sort projects by profit (lowest profit/biggest losses first, as these need attention)
   const sortedProjects = [...projects].sort((a, b) => {
-    const budgetA = a.budget || a.revenue;
-    const actualCostA = a.actualCost || a.cost;
-    const varianceA = budgetA - actualCostA;
+    const profitA = a.profit || 0;
+    const profitB = b.profit || 0;
     
-    const budgetB = b.budget || b.revenue;
-    const actualCostB = b.actualCost || b.cost;
-    const varianceB = budgetB - actualCostB;
-    
-    return varianceA - varianceB; // Sort by variance (negative first - over budget projects)
+    return profitA - profitB; // Sort by profit (negative/lowest first - most problematic projects)
   });
 
   // Handle project selection
@@ -158,7 +153,12 @@ const FinancialSummary = ({ data, onProjectSelection, selectedProjects }) => {
       <div className="bg-white rounded-lg shadow-md">
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">Project Financials</h3>
+            <div>
+              <h3 className="text-lg font-semibold">Project Financials</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Estimated Revenue = Budget × 1.30 (30% markup). Profit = Est. Revenue - Actual Cost
+              </p>
+            </div>
             <div className="flex items-center">
               <button
                 className="text-sm text-blue-600 hover:text-blue-800"
@@ -192,13 +192,16 @@ const FinancialSummary = ({ data, onProjectSelection, selectedProjects }) => {
                   Budget
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Est. Revenue
+                </th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actual Cost
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Variance
+                  Profit
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Budget Usage
+                  Margin
                 </th>
               </tr>
             </thead>
@@ -222,40 +225,29 @@ const FinancialSummary = ({ data, onProjectSelection, selectedProjects }) => {
                     {project.client}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                    {formatCurrency(project.budget || project.revenue)}
+                    {formatCurrency(project.budget)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-600">
+                    {formatCurrency(project.estimatedRevenue || project.revenue)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
                     {formatCurrency(project.actualCost || project.cost)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
-                    {(() => {
-                      const budget = project.budget || project.revenue;
-                      const actualCost = project.actualCost || project.cost;
-                      const variance = budget - actualCost;
-                      return (
-                        <span className={variance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                          {formatCurrency(variance)}
-                        </span>
-                      );
-                    })()}
+                    <span className={project.profit >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {formatCurrency(project.profit)}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                    {(() => {
-                      const budget = project.budget || project.revenue;
-                      const actualCost = project.actualCost || project.cost;
-                      const usage = budget > 0 ? (actualCost / budget) : 0;
-                      return (
-                        <span 
-                          className={
-                            usage <= 1 ? 'text-green-600' : 
-                            usage <= 1.1 ? 'text-yellow-600' : 
-                            'text-red-600'
-                          }
-                        >
-                          {formatPercentage(usage)}
-                        </span>
-                      );
-                    })()}
+                    <span 
+                      className={
+                        project.profitMargin >= 0.15 ? 'text-green-600' : 
+                        project.profitMargin > 0 ? 'text-yellow-600' : 
+                        'text-red-600'
+                      }
+                    >
+                      {formatPercentage(project.profitMargin)}
+                    </span>
                   </td>
                 </tr>
               ))}

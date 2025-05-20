@@ -373,13 +373,13 @@ const getCostRevenueAnalysis = async (req, res) => {
         const actualCost = project.actualCost || 0;
         
         if (hasFinancialData) {
-          // Use budget as the planned revenue baseline
-          // In reality, revenue might be different from budget, but budget is what we have
-          const revenue = budget; // Use budget as baseline revenue
+          // Estimate revenue using standard markup on budget (30% markup is common in professional services)
+          const MARKUP_PERCENTAGE = 1.30; // 30% markup on costs
+          const estimatedRevenue = budget * MARKUP_PERCENTAGE; // Estimated revenue based on budget
           const cost = actualCost; // Use actual cost as the real spending
           
-          const profit = revenue - cost; // Real profit/loss calculation
-          const profitMargin = revenue > 0 ? profit / revenue : 0;
+          const profit = estimatedRevenue - cost; // Real profit/loss calculation
+          const profitMargin = estimatedRevenue > 0 ? profit / estimatedRevenue : 0;
           
           return {
             id: project.id,
@@ -390,7 +390,8 @@ const getCostRevenueAnalysis = async (req, res) => {
             endDate: project.endDate,
             budget: budget,
             actualCost: actualCost,
-            revenue: revenue,
+            estimatedRevenue: estimatedRevenue,
+            revenue: estimatedRevenue, // For backward compatibility
             cost: cost,
             profit: profit,
             profitMargin: profitMargin
