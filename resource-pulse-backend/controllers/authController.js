@@ -184,6 +184,14 @@ const login = async (req, res) => {
     
     const user = userResult.recordset[0];
     
+    console.log('Auth Debug: Login user data from database:', {
+      UserID: user.UserID,
+      UserIDType: typeof user.UserID,
+      Username: user.Username,
+      Email: user.Email,
+      Role: user.Role
+    });
+    
     // Check if user is active
     if (!user.IsActive) {
       return res.status(403).json({ message: 'Account is disabled. Please contact an administrator.' });
@@ -250,16 +258,21 @@ const login = async (req, res) => {
       `);
     
     // Generate JWT token - ENSURE userId is a number
-    const token = jwt.sign(
-      { 
-        userId: Number(user.UserID), // Force as number
-        username: user.Username,
-        email: user.Email,
-        role: user.Role
-      },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRY }
-    );
+    const tokenPayload = { 
+      userId: Number(user.UserID), // Force as number
+      username: user.Username,
+      email: user.Email,
+      role: user.Role
+    };
+    
+    console.log('Auth Debug: Login token payload being signed:', {
+      userId: tokenPayload.userId,
+      userIdType: typeof tokenPayload.userId,
+      isNaN: isNaN(tokenPayload.userId),
+      originalUserID: user.UserID
+    });
+    
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
     
     // Generate refresh token
     const refreshToken = crypto.randomBytes(40).toString('hex');
@@ -316,12 +329,17 @@ const refreshToken = async (req, res) => {
     const tokenResult = await pool.request()
       .input('token', sql.NVarChar, refreshToken)
       .query(`
-        SELECT rt.TokenID, rt.UserID, rt.ExpiresAt, rt.RevokedAt,
+        SELECT rt.TokenID, rt.UserID as RefreshUserID, rt.ExpiresAt, rt.RevokedAt,
                u.UserID, u.Username, u.Email, u.Role, u.IsActive
         FROM RefreshTokens rt
         JOIN Users u ON rt.UserID = u.UserID
         WHERE rt.Token = @token
       `);
+    
+    console.log('Auth Debug: Refresh token query result:', {
+      recordCount: tokenResult.recordset.length,
+      tokenData: tokenResult.recordset[0]
+    });
     
     if (tokenResult.recordset.length === 0) {
       return res.status(401).json({ message: 'Invalid refresh token' });
@@ -340,16 +358,22 @@ const refreshToken = async (req, res) => {
     }
     
     // Generate new JWT token - ENSURE userId is a number
-    const newToken = jwt.sign(
-      { 
-        userId: Number(tokenData.UserID), // Force as number
-        username: tokenData.Username,
-        email: tokenData.Email,
-        role: tokenData.Role
-      },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRY }
-    );
+    const refreshTokenPayload = { 
+      userId: Number(tokenData.UserID), // Force as number
+      username: tokenData.Username,
+      email: tokenData.Email,
+      role: tokenData.Role
+    };
+    
+    console.log('Auth Debug: Refresh token payload being signed:', {
+      userId: refreshTokenPayload.userId,
+      userIdType: typeof refreshTokenPayload.userId,
+      isNaN: isNaN(refreshTokenPayload.userId),
+      originalUserID: tokenData.UserID,
+      tokenDataKeys: Object.keys(tokenData)
+    });
+    
+    const newToken = jwt.sign(refreshTokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
     
     res.json({
       message: 'Token refreshed successfully',
