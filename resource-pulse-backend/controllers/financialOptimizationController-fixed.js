@@ -60,8 +60,25 @@ const generateOptimizedAllocations = async (req, res) => {
       
       console.log(`Found ${projects.length} projects for optimization`);
       
+      // If no projects found, return empty recommendations instead of throwing error
       if (projects.length === 0) {
-        throw new Error('No projects found for optimization');
+        console.log('No projects found for optimization - returning empty recommendations');
+        return res.json({
+          recommendations: [],
+          optimizationGoal: options.optimizationGoal,
+          financialImpact: {
+            revenueChange: 0,
+            costChange: 0,
+            profitChange: 0
+          },
+          dateRange: {
+            startDate: options.startDate || new Date().toISOString().split('T')[0],
+            endDate: options.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          },
+          aiInsights: null,
+          isFallbackData: false,
+          notice: "No projects found in the selected date range"
+        });
       }
 
       // Get resource allocation data for better optimization recommendations
@@ -181,30 +198,51 @@ const generateOptimizedAllocations = async (req, res) => {
         });
       }
       
-      // Generate sample AI insights
-      const aiInsights = {
-        summary: "Financial optimization opportunities identified across multiple projects. Priority should be given to addressing over-budget projects and reallocating resources from under-utilized projects.",
-        opportunities: [
-          "Increase budget allocations for projects that consistently exceed their budgets to improve planning accuracy",
-          "Reassign resources from under-utilized projects to maximize overall productivity",
-          "Implement stricter budget controls on high-risk projects to prevent cost overruns"
-        ],
-        risks: [
-          "Continued operation of over-budget projects without adjustment may impact overall portfolio profitability",
-          "Under-utilized budgets represent inefficient capital allocation",
-          "Recent trend indicates increasing cost variances across projects"
-        ]
+      // Calculate real financial impact from project data
+      const totalBudget = projects.reduce((sum, p) => sum + (p.budget || 0), 0);
+      const totalActualCost = projects.reduce((sum, p) => sum + (p.actualCost || 0), 0);
+      const totalEstimatedRevenue = totalBudget * 1.30; // 30% markup
+      const totalCurrentProfit = totalEstimatedRevenue - totalActualCost;
+      
+      // Calculate potential savings from recommendations
+      const potentialSavings = recommendations.reduce((total, rec) => {
+        const savings = rec.financialImpact?.potentialSavings || 
+                       rec.financialImpact?.surplus || 
+                       Math.abs(rec.financialImpact?.deficit || 0);
+        return total + (savings || 0);
+      }, 0);
+      
+      const realFinancialImpact = {
+        currentRevenue: totalEstimatedRevenue,
+        currentCost: totalActualCost, 
+        currentProfit: totalCurrentProfit,
+        revenueChange: 0, // Would be calculated based on specific optimizations
+        costChange: -Math.min(potentialSavings * 0.1, totalActualCost * 0.05), // Conservative 5-10% cost reduction
+        profitChange: Math.min(potentialSavings * 0.1, totalActualCost * 0.05) // Corresponding profit increase
       };
       
-      // Return formatted optimization results
+      // Generate AI insights based on real data
+      const aiInsights = {
+        summary: `Analysis of ${projects.length} projects shows ${recommendations.length} optimization opportunities. Current portfolio has ${
+          totalCurrentProfit >= 0 ? 'positive' : 'negative'
+        } profitability of ${((totalCurrentProfit / totalEstimatedRevenue) * 100).toFixed(1)}%.`,
+        opportunities: [
+          recommendations.length > 0 ? `Address ${recommendations.filter(r => r.impact === 'high').length} high-priority financial issues` : "No immediate optimization opportunities identified",
+          potentialSavings > 0 ? `Potential cost savings of ${potentialSavings.toLocaleString()} identified` : "Focus on improving project efficiency",
+          "Monitor budget utilization trends to prevent future overruns"
+        ].filter(Boolean),
+        risks: [
+          totalCurrentProfit < 0 ? "Portfolio is currently operating at a loss" : null,
+          recommendations.filter(r => r.type === 'budget_adjustment').length > 0 ? "Multiple projects exceeding budget allocations" : null,
+          recommendations.filter(r => r.type === 'over_allocation').length > 0 ? "Resource over-allocation affecting project delivery" : null
+        ].filter(Boolean)
+      };
+      
+      // Return formatted optimization results with real data
       res.json({
         recommendations: recommendations || [],
         optimizationGoal: options.optimizationGoal,
-        financialImpact: {
-          revenueChange: 50000,
-          costChange: -25000,
-          profitChange: 75000
-        },
+        financialImpact: realFinancialImpact,
         dateRange: {
           startDate: options.startDate || new Date().toISOString().split('T')[0],
           endDate: options.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -216,88 +254,24 @@ const generateOptimizedAllocations = async (req, res) => {
     } catch (dbError) {
       console.error('Database error generating optimized allocations:', dbError);
       
-      // Generate fallback data with mock recommendations
-      const fallbackRecommendations = [
-        {
-          type: 'budget_adjustment',
-          projectId: 123,
-          projectName: 'Project Alpha',
-          client: 'ACME Corp',
-          description: 'Project is over budget (115% utilized)',
-          impact: 'high',
-          suggestedAction: 'Increase project budget to cover actual costs',
-          financialImpact: {
-            currentBudget: 100000,
-            actualCost: 115000,
-            deficit: 15000,
-            suggestedBudget: 126500
-          }
-        },
-        {
-          type: 'resource_reallocation',
-          projectId: 456,
-          projectName: 'Project Beta',
-          client: 'Globex Inc',
-          description: 'Project is significantly under budget (32% utilized)',
-          impact: 'medium',
-          suggestedAction: 'Reallocate resources to other projects or reduce budget',
-          financialImpact: {
-            currentBudget: 80000,
-            actualCost: 25600,
-            surplus: 54400,
-            potentialSavings: 16000
-          }
-        },
-        {
-          type: 'rate_adjustment',
-          projectId: 789,
-          projectName: 'Project Gamma',
-          client: 'Umbrella Corp',
-          description: 'Project profitability is below target (8% margin)',
-          impact: 'medium',
-          suggestedAction: 'Increase billable rates by 5% to improve margin',
-          financialImpact: {
-            currentRevenue: 150000,
-            currentCost: 138000,
-            currentMargin: 0.08,
-            projectedRevenue: 157500,
-            projectedMargin: 0.124
-          }
-        }
-      ];
-      
-      // Generate sample AI insights
-      const aiInsights = {
-        summary: "Financial optimization opportunities identified across multiple projects. Priority should be given to addressing over-budget projects and reallocating resources from under-utilized projects.",
-        opportunities: [
-          "Increase budget allocations for projects that consistently exceed their budgets to improve planning accuracy",
-          "Reassign resources from under-utilized projects to maximize overall productivity",
-          "Implement stricter budget controls on high-risk projects to prevent cost overruns"
-        ],
-        risks: [
-          "Continued operation of over-budget projects without adjustment may impact overall portfolio profitability",
-          "Under-utilized budgets represent inefficient capital allocation",
-          "Recent trend indicates increasing cost variances across projects"
-        ]
-      };
-      
-      // Return formatted optimization results with fallback data
-      res.json({
-        recommendations: fallbackRecommendations,
+      // Return error instead of fallback data
+      return res.status(500).json({
+        error: 'Failed to generate optimization recommendations',
+        details: dbError.message,
+        recommendations: [],
         optimizationGoal: options.optimizationGoal,
         financialImpact: {
-          revenueChange: 50000,
-          costChange: -25000,
-          profitChange: 75000
+          revenueChange: 0,
+          costChange: 0,
+          profitChange: 0
         },
         dateRange: {
           startDate: options.startDate || new Date().toISOString().split('T')[0],
           endDate: options.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         },
-        aiInsights: options.includeAIInsights ? aiInsights : null,
-        isFallbackData: true,
-        notice: "Using fallback data due to database error",
-        error: dbError.message
+        aiInsights: null,
+        isFallbackData: false,
+        notice: "Unable to retrieve project data. Please check database connection."
       });
     }
   } catch (error) {
@@ -500,141 +474,29 @@ const getCostRevenueAnalysis = async (req, res) => {
     } catch (dbError) {
       console.error('Database error getting cost-revenue analysis:', dbError);
       
-      // Generate fallback data
-      const fallbackProjects = [
-        {
-          id: 1,
-          name: 'Enterprise CRM Implementation',
-          client: 'Acme Corporation',
-          status: 'In Progress',
-          startDate: '2024-01-15',
-          endDate: '2024-08-30',
-          revenue: 450000,
-          cost: 310000,
-          profit: 140000,
-          profitMargin: 0.31
-        },
-        {
-          id: 2,
-          name: 'Mobile Banking App',
-          client: 'FinTech Solutions',
-          status: 'In Progress',
-          startDate: '2024-03-10',
-          endDate: '2024-10-15',
-          revenue: 380000,
-          cost: 290000,
-          profit: 90000,
-          profitMargin: 0.24
-        },
-        {
-          id: 3,
-          name: 'Supply Chain Optimization',
-          client: 'Global Logistics Inc',
-          status: 'At Risk',
-          startDate: '2024-02-05',
-          endDate: '2024-07-20',
-          revenue: 320000,
-          cost: 345000,
-          profit: -25000,
-          profitMargin: -0.08
-        },
-        {
-          id: 4,
-          name: 'Healthcare Analytics Platform',
-          client: 'MedTech Innovations',
-          status: 'In Progress',
-          startDate: '2024-04-01',
-          endDate: '2024-11-30',
-          revenue: 540000,
-          cost: 410000,
-          profit: 130000,
-          profitMargin: 0.24
-        },
-        {
-          id: 5,
-          name: 'E-commerce Website Redesign',
-          client: 'Fashion Forward',
-          status: 'In Progress',
-          startDate: '2024-01-20',
-          endDate: '2024-06-15',
-          revenue: 210000,
-          cost: 170000,
-          profit: 40000,
-          profitMargin: 0.19
-        }
-      ];
-      
-      // Calculate summary totals
-      const totalRevenue = fallbackProjects.reduce((sum, project) => sum + project.revenue, 0);
-      const totalCost = fallbackProjects.reduce((sum, project) => sum + project.cost, 0);
-      const totalProfit = fallbackProjects.reduce((sum, project) => sum + project.profit, 0); // Sum individual project profits
-      const profitMargin = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
-      
-      // Generate monthly time series data for chart
-      const monthlyData = [];
-      const currentDate = new Date();
-      
-      // Generate data for 6 months
-      for (let i = -3; i <= 3; i++) {
-        const month = new Date(currentDate);
-        month.setMonth(currentDate.getMonth() + i);
-        
-        // Use a random factor for demonstration purposes
-        const randomFactor = 0.9 + (Math.random() * 0.3); // 0.9 to 1.2
-        
-        // Calculate values based on month position
-        const monthRevenue = (totalRevenue / 6) * randomFactor;
-        const monthCost = (totalCost / 6) * randomFactor * 0.95; // Slightly less random variation in costs
-        const monthProfit = monthRevenue - monthCost;
-        const monthMargin = monthRevenue > 0 ? monthProfit / monthRevenue : 0;
-        
-        monthlyData.push({
-          period: month.toISOString().substring(0, 7), // YYYY-MM
-          revenue: monthRevenue,
-          cost: monthCost,
-          profit: monthProfit,
-          margin: monthMargin
-        });
-      }
-      
-      // Generate AI insights for the financial data
-      const aiInsights = {
-        summary: "Financial analysis shows a positive overall trend with improving profit margins. Several projects are performing above expectations, while a few require attention due to cost overruns.",
-        opportunities: [
-          "Increase investment in high-margin projects to maximize return on resource allocation",
-          "Evaluate rate structures for projects with margins below 15%",
-          "Consider implementing performance bonuses for teams on projects exceeding 25% margin"
-        ],
-        risks: [
-          "Several projects show budget utilization above 100%, requiring immediate attention",
-          "Seasonal variations may impact Q4 revenue projections",
-          "Resource allocation imbalances may be affecting overall portfolio performance"
-        ]
-      };
-      
-      // Return formatted response with fallback data
-      res.json({
-        projects: fallbackProjects,
+      // Return error instead of fallback data
+      return res.status(500).json({
+        error: 'Failed to get cost-revenue analysis',
+        details: dbError.message,
+        projects: [],
         summary: {
-          totalRevenue: totalRevenue,
-          totalCost: totalCost,
-          totalProfit: totalProfit,
-          profitMargin: profitMargin,
-          revenueTrend: 0.08, // 8% increase
-          costTrend: 0.05, // 5% increase
-          profitTrend: 0.12, // 12% increase
-          marginTrend: 0.03 // 3% improvement
+          totalRevenue: 0,
+          totalCost: 0,
+          totalProfit: 0,
+          profitMargin: 0,
+          revenueTrend: 0,
+          costTrend: 0,
+          profitTrend: 0,
+          marginTrend: 0
         },
         timeSeries: {
-          monthly: monthlyData,
+          monthly: [],
           quarterly: [],
           yearly: []
         },
-        aiInsights: aiInsights,
+        aiInsights: null,
         retrievedAt: new Date().toISOString(),
-        isFallbackData: true,
-        notice: "Using fallback data due to database error",
-        error: dbError.message
+        notice: "Unable to retrieve project data. Please check database connection."
       });
     }
   } catch (error) {
