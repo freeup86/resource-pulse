@@ -22,8 +22,18 @@ const FinancialSummary = ({ data, onProjectSelection, selectedProjects }) => {
   console.log('Financial data received:', data);
   const projects = Array.isArray(data.projects) ? data.projects : [];
   
-  // Sort projects by profit margin
-  const sortedProjects = [...projects].sort((a, b) => b.profitMargin - a.profitMargin);
+  // Sort projects by budget variance (most over budget first, as these need attention)
+  const sortedProjects = [...projects].sort((a, b) => {
+    const budgetA = a.budget || a.revenue;
+    const actualCostA = a.actualCost || a.cost;
+    const varianceA = budgetA - actualCostA;
+    
+    const budgetB = b.budget || b.revenue;
+    const actualCostB = b.actualCost || b.cost;
+    const varianceB = budgetB - actualCostB;
+    
+    return varianceA - varianceB; // Sort by variance (negative first - over budget projects)
+  });
 
   // Handle project selection
   const handleProjectCheckboxChange = (projectId) => {
@@ -179,16 +189,16 @@ const FinancialSummary = ({ data, onProjectSelection, selectedProjects }) => {
                   Client
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Revenue
+                  Budget
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cost
+                  Actual Cost
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Profit
+                  Variance
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Margin
+                  Budget Usage
                 </th>
               </tr>
             </thead>
@@ -212,26 +222,40 @@ const FinancialSummary = ({ data, onProjectSelection, selectedProjects }) => {
                     {project.client}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                    {formatCurrency(project.revenue)}
+                    {formatCurrency(project.budget || project.revenue)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                    {formatCurrency(project.cost)}
+                    {formatCurrency(project.actualCost || project.cost)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
-                    <span className={project.profit >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      {formatCurrency(project.profit)}
-                    </span>
+                    {(() => {
+                      const budget = project.budget || project.revenue;
+                      const actualCost = project.actualCost || project.cost;
+                      const variance = budget - actualCost;
+                      return (
+                        <span className={variance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {formatCurrency(variance)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                    <span 
-                      className={
-                        project.profitMargin >= 0.25 ? 'text-green-600' : 
-                        project.profitMargin > 0 ? 'text-yellow-600' : 
-                        'text-red-600'
-                      }
-                    >
-                      {formatPercentage(project.profitMargin)}
-                    </span>
+                    {(() => {
+                      const budget = project.budget || project.revenue;
+                      const actualCost = project.actualCost || project.cost;
+                      const usage = budget > 0 ? (actualCost / budget) : 0;
+                      return (
+                        <span 
+                          className={
+                            usage <= 1 ? 'text-green-600' : 
+                            usage <= 1.1 ? 'text-yellow-600' : 
+                            'text-red-600'
+                          }
+                        >
+                          {formatPercentage(usage)}
+                        </span>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}

@@ -367,35 +367,56 @@ const getCostRevenueAnalysis = async (req, res) => {
         
         const hasFinancialData = project.budget !== null && project.budget !== 0;
         
-        // Calculate revenue based on budget (simulating a real calculation)
-        // If no budget, create a random value based on project ID for consistency
-        const revenue = hasFinancialData ? 
-          project.budget * 1.2 : // 20% markup
-          100000 + (project.id * 50000); // Random but consistent revenue
+        // Calculate financial metrics properly
+        // For projects with real data, use budget as the planned revenue and actualCost as actual spending
+        const budget = project.budget || 0;
+        const actualCost = project.actualCost || 0;
         
-        // Get cost from actual cost or generate random value
-        const cost = hasFinancialData ?
-          project.actualCost || 0 :
-          revenue * (0.6 + (project.id % 5) * 0.1); // 60-100% of revenue based on ID
-        
-        // Calculate profit
-        const profit = revenue - cost;
-        
-        // Calculate profit margin
-        const profitMargin = revenue > 0 ? profit / revenue : 0;
-        
-        return {
-          id: project.id,
-          name: project.name,
-          client: project.client,
-          status: project.status,
-          startDate: project.startDate,
-          endDate: project.endDate,
-          revenue: revenue,
-          cost: cost,
-          profit: profit,
-          profitMargin: profitMargin
-        };
+        if (hasFinancialData) {
+          // Use budget as the planned revenue baseline
+          // In reality, revenue might be different from budget, but budget is what we have
+          const revenue = budget; // Use budget as baseline revenue
+          const cost = actualCost; // Use actual cost as the real spending
+          
+          const profit = revenue - cost; // Real profit/loss calculation
+          const profitMargin = revenue > 0 ? profit / revenue : 0;
+          
+          return {
+            id: project.id,
+            name: project.name,
+            client: project.client,
+            status: project.status,
+            startDate: project.startDate,
+            endDate: project.endDate,
+            budget: budget,
+            actualCost: actualCost,
+            revenue: revenue,
+            cost: cost,
+            profit: profit,
+            profitMargin: profitMargin
+          };
+        } else {
+          // Generate sample data for projects without financial data
+          const revenue = 100000 + (project.id * 50000); // Random but consistent revenue
+          const cost = revenue * (0.6 + (project.id % 5) * 0.1); // 60-100% of revenue based on ID
+          const profit = revenue - cost;
+          const profitMargin = revenue > 0 ? profit / revenue : 0;
+          
+          return {
+            id: project.id,
+            name: project.name,
+            client: project.client,
+            status: project.status,
+            startDate: project.startDate,
+            endDate: project.endDate,
+            budget: revenue * 0.9, // Simulate a budget slightly lower than revenue
+            actualCost: cost,
+            revenue: revenue,
+            cost: cost,
+            profit: profit,
+            profitMargin: profitMargin
+          };
+        }
       });
       
       // Calculate summary totals
