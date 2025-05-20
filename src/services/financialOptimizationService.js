@@ -70,8 +70,13 @@ export const getOptimizationRecommendations = async (params = {}) => {
  */
 export const getCostRevenueAnalysis = async (params = {}) => {
   try {
-    console.log('Calling cost-revenue API with params:', params);
-    const response = await api.get('/financial/cost-revenue', { params });
+    // Add cache buster to ensure fresh data
+    const paramsWithCacheBuster = {
+      ...params,
+      _t: Date.now()
+    };
+    console.log('Calling cost-revenue API with params:', paramsWithCacheBuster);
+    const response = await api.get('/financial/cost-revenue', { params: paramsWithCacheBuster });
     
     // Log the response for debugging
     console.log('Cost-revenue API response:', response.data);

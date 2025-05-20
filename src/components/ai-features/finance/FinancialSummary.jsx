@@ -12,6 +12,12 @@ const FinancialSummary = ({ data, onProjectSelection, selectedProjects }) => {
     }).format(value);
   };
 
+  // Debug the summary data
+  console.log('Frontend Financial Summary Debug:');
+  console.log('- Summary data:', data.summary);
+  console.log('- Total Profit from summary:', data.summary?.totalProfit);
+  console.log('- Projects data:', data.projects?.map(p => ({ name: p.name, profit: p.profit })));
+
   // Helper function to format percentage
   const formatPercentage = (value) => {
     return `${(value * 100).toFixed(1)}%`;

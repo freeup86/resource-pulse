@@ -426,6 +426,14 @@ const getCostRevenueAnalysis = async (req, res) => {
       const totalProfit = projects.reduce((sum, project) => sum + project.profit, 0); // Sum individual project profits
       const profitMargin = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
       
+      console.log('Financial Summary Calculation Debug:');
+      console.log('- Number of projects:', projects.length);
+      console.log('- Individual project profits:', projects.map(p => ({ name: p.name, profit: p.profit })));
+      console.log('- Total Revenue:', totalRevenue);
+      console.log('- Total Cost:', totalCost);
+      console.log('- Total Profit (sum of individual):', totalProfit);
+      console.log('- Profit Margin:', profitMargin);
+      
       // Generate monthly time series data for chart
       const monthlyData = [];
       const currentDate = new Date();
