@@ -1,4 +1,5 @@
 import api from './api';
+import axios from 'axios';
 
 /**
  * Service for handling authentication-related API calls
@@ -33,6 +34,8 @@ export const login = async (credentials) => {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('refreshToken', response.data.refreshToken);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      // Store the login timestamp to track token age
+      localStorage.setItem('login_timestamp', Date.now().toString());
     }
     
     return response.data;
@@ -59,6 +62,7 @@ export const logout = async () => {
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('login_timestamp');
     
     return { message: 'Logged out successfully' };
   } catch (error) {
@@ -68,6 +72,7 @@ export const logout = async () => {
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('login_timestamp');
     
     throw error;
   }
@@ -90,6 +95,8 @@ export const refreshToken = async () => {
     // Store new token in localStorage
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
+      // Update timestamp when refreshing token
+      localStorage.setItem('login_timestamp', Date.now().toString());
     }
     
     return response.data;
@@ -100,24 +107,178 @@ export const refreshToken = async () => {
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('login_timestamp');
     
     throw error;
   }
 };
 
 /**
- * Get current user profile
+ * Get current user profile - with additional fallback and debugging
  * @returns {Promise<Object>} - User profile data
  */
 export const getProfile = async () => {
   try {
-    // Add a cache buster to prevent any potential caching issues
-    const response = await api.get('/auth/profile', {
-      params: { _t: new Date().getTime() }
+    console.log('Profile fetch: Starting request with cache buster');
+    
+    // Get API URL from environment or fallback
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://resource-pulse-backend.onrender.com/api';
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    
+    // Validate token format to prevent parsing issues
+    if (typeof token !== 'string' || token.trim() === '') {
+      console.error('Profile fetch: Invalid token format', token);
+      // Force logout and clear storage since token is invalid
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('login_timestamp');
+      throw new Error('Invalid authentication token format');
+    }
+    
+    // Make a direct axios request with full debugging
+    // This bypasses any potentially problematic interceptors
+    const timestamp = new Date().getTime();
+    const response = await axios({
+      method: 'GET',
+      url: `${apiUrl}/auth/profile`,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      },
+      params: { _t: timestamp } // Add cache buster
     });
+    
+    console.log('Profile fetch: Successful response received');
+    
+    // Update stored user data with fresh profile info
+    if (response.data) {
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        const updatedUser = {
+          ...currentUser,
+          ...response.data
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    }
+    
     return response.data;
   } catch (error) {
     console.error('Profile fetch error:', error);
+    
+    // Add more detailed error logging with extra protection against malformed errors
+    if (error.response) {
+      console.error('Profile fetch: Server response error:', {
+        status: error.response.status,
+        data: error.response.data
+      });
+      
+      // If unauthorized, the token might be invalid, try to refresh
+      if (error.response.status === 401) {
+        try {
+          console.log('Profile fetch: Attempting token refresh due to 401');
+          await refreshToken();
+          // After refreshing, try fetching profile again but directly 
+          // to avoid infinite loop with the original method
+          return getProfileAfterRefresh();
+        } catch (refreshError) {
+          console.error('Profile fetch: Token refresh failed:', refreshError);
+          
+          // Force logout on refresh failure
+          localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          localStorage.removeItem('login_timestamp');
+          
+          throw new Error('Authentication expired. Please log in again.');
+        }
+      }
+    } else if (error.request) {
+      console.error('Profile fetch: No response from server', error.request);
+    } else {
+      console.error('Profile fetch: Request setup error', typeof error === 'object' ? error.message || 'Unknown error' : error);
+    }
+    
+    // If the error is just "wt" or another very short string, it's likely a token parsing issue
+    if (typeof error === 'string' && error.length < 5) {
+      console.error('Profile fetch: Detected token parsing error:', error);
+      // Clear the problematic token
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      throw new Error('Authentication token error. Please log in again.');
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Helper function to get profile after token refresh
+ * This avoids infinite loop with the normal getProfile
+ */
+const getProfileAfterRefresh = async () => {
+  try {
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://resource-pulse-backend.onrender.com/api';
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      throw new Error('No authentication token available after refresh');
+    }
+    
+    // Validate token format to prevent parsing issues
+    if (typeof token !== 'string' || token.trim() === '') {
+      console.error('Profile fetch after refresh: Invalid token format');
+      throw new Error('Invalid authentication token format after refresh');
+    }
+    
+    // Add retry mechanism with exponential backoff
+    let retries = 0;
+    const maxRetries = 3;
+    let lastError = null;
+    
+    while (retries < maxRetries) {
+      try {
+        console.log(`Profile fetch after refresh: Attempt ${retries + 1} of ${maxRetries}`);
+        
+        const response = await axios({
+          method: 'GET',
+          url: `${apiUrl}/auth/profile`,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          params: { _t: new Date().getTime(), retry: retries } // Add cache buster with retry counter
+        });
+        
+        console.log('Profile fetch after refresh: Success');
+        return response.data;
+      } catch (err) {
+        lastError = err;
+        retries++;
+        
+        if (retries < maxRetries) {
+          const delay = Math.pow(2, retries) * 1000; // Exponential backoff: 2s, 4s, 8s
+          console.log(`Profile fetch after refresh: Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    console.error('Profile fetch after refresh failed after all retries:', lastError);
+    throw lastError || new Error('Profile fetch failed after maximum retries');
+  } catch (error) {
+    console.error('Profile fetch after refresh failed:', error);
     throw error;
   }
 };
@@ -151,7 +312,7 @@ export const updateProfile = async (profileData) => {
     if (storedUser) {
       const updatedUser = {
         ...storedUser,
-        ...profileData
+        ...response.data // Use server response data instead of request data
       };
       localStorage.setItem('user', JSON.stringify(updatedUser));
     }
@@ -219,17 +380,34 @@ export const getToken = () => {
 };
 
 /**
+ * Check if token needs refreshing based on age
+ * @returns {boolean} - True if token should be refreshed
+ */
+export const shouldRefreshToken = () => {
+  const loginTimestamp = localStorage.getItem('login_timestamp');
+  if (!loginTimestamp) return true;
+  
+  const tokenAge = Date.now() - parseInt(loginTimestamp, 10);
+  // Refresh if token is older than 20 minutes
+  return tokenAge > 20 * 60 * 1000;
+};
+
+/**
  * Update the API axios instance with the authentication token
  */
 export const setupAuthInterceptor = () => {
   // Remove previous interceptors to prevent duplicates
-  api.interceptors.request.eject(
-    api.interceptors.request.handlers[api.interceptors.request.handlers.length - 1]?.id
-  );
+  if (api.interceptors.request.handlers.length > 0) {
+    api.interceptors.request.handlers.forEach(handler => {
+      api.interceptors.request.eject(handler.id);
+    });
+  }
 
-  api.interceptors.response.eject(
-    api.interceptors.response.handlers[api.interceptors.response.handlers.length - 1]?.id
-  );
+  if (api.interceptors.response.handlers.length > 0) {
+    api.interceptors.response.handlers.forEach(handler => {
+      api.interceptors.response.eject(handler.id);
+    });
+  }
 
   // Add request interceptor for authentication
   api.interceptors.request.use(
@@ -237,6 +415,37 @@ export const setupAuthInterceptor = () => {
       const token = getToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        
+        // Add cache control headers for authenticated requests
+        config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+        config.headers['Pragma'] = 'no-cache';
+        config.headers['Expires'] = '0';
+        
+        // Add automatic token refresh for requests if token is old
+        // But skip refresh for certain endpoints to avoid circular requests
+        const skipRefreshEndpoints = [
+          '/auth/login', 
+          '/auth/refresh-token', 
+          '/auth/logout',
+          '/auth/profile'
+        ];
+        
+        const endpoint = config.url.split('?')[0]; // Remove query params
+        const shouldSkipRefresh = skipRefreshEndpoints.some(e => endpoint.includes(e));
+        
+        if (!shouldSkipRefresh && shouldRefreshToken()) {
+          // Return a promise that first refreshes the token, then continues with the request
+          return refreshToken()
+            .then(refreshResult => {
+              // Update the request with the new token
+              config.headers.Authorization = `Bearer ${refreshResult.token}`;
+              return config;
+            })
+            .catch(err => {
+              console.error('Token refresh failed during request:', err);
+              return config; // Continue with original request even if refresh fails
+            });
+        }
       }
       return config;
     },
@@ -259,7 +468,7 @@ export const setupAuthInterceptor = () => {
         !originalRequest._retry &&
         !originalRequest.url.includes('/auth/login') &&
         !originalRequest.url.includes('/auth/refresh-token') &&
-        !originalRequest.url.includes('/auth/profile?_t=') // Skip profile checks
+        !originalRequest.url.includes('/auth/profile') // Remove the specific query parameter check
       ) {
         originalRequest._retry = true;
 
@@ -280,6 +489,7 @@ export const setupAuthInterceptor = () => {
           localStorage.removeItem('token');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');
+          localStorage.removeItem('login_timestamp');
 
           // Redirect to login page (this should be handled by the auth context)
           // Only redirect if we're not already on the login page to prevent loops

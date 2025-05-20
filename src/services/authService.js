@@ -129,6 +129,17 @@ export const getProfile = async () => {
       throw new Error('No authentication token found');
     }
     
+    // Validate token format to prevent parsing issues
+    if (typeof token !== 'string' || token.trim() === '') {
+      console.error('Profile fetch: Invalid token format', token);
+      // Force logout and clear storage since token is invalid
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('login_timestamp');
+      throw new Error('Invalid authentication token format');
+    }
+    
     // Make a direct axios request with full debugging
     // This bypasses any potentially problematic interceptors
     const timestamp = new Date().getTime();
@@ -162,6 +173,15 @@ export const getProfile = async () => {
     return response.data;
   } catch (error) {
     console.error('Profile fetch error:', error);
+    
+    // If the error is just "wt" or another very short string, it's likely a token parsing issue
+    if (typeof error === 'string' && error.length < 5) {
+      console.error('Profile fetch: Detected token parsing error:', error);
+      // Clear the problematic token
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      throw new Error('Authentication token error. Please log in again.');
+    }
     
     // Add more detailed error logging
     if (error.response) {
