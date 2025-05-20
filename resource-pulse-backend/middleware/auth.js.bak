@@ -29,14 +29,6 @@ const authenticate = (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     
     // Attach user info to request object
-    // Force userId to be a number to prevent SQL parameter validation errors
-    if (decoded && decoded.userId) {
-      decoded.userId = Number(decoded.userId);
-      if (isNaN(decoded.userId)) {
-        console.error('Auth middleware: Invalid userId in token', decoded);
-        return res.status(401).json({ message: 'Authentication failed. Invalid user ID in token.' });
-      }
-    }
     req.user = decoded;
     
     // Continue to the next middleware or route handler

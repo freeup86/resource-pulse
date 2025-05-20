@@ -1,4 +1,4 @@
-// authController-fixed.js - Authentication controller with userId validation fix
+// authController.js - Authentication controller
 const { poolPromise, sql } = require('../db/config');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -249,10 +249,10 @@ const login = async (req, res) => {
         WHERE UserID = @userId
       `);
     
-    // Generate JWT token - ENSURE userId is a number
+    // Generate JWT token
     const token = jwt.sign(
       { 
-        userId: Number(user.UserID), // Force as number
+        userId: user.UserID,
         username: user.Username,
         email: user.Email,
         role: user.Role
@@ -339,10 +339,10 @@ const refreshToken = async (req, res) => {
       return res.status(403).json({ message: 'Account is disabled' });
     }
     
-    // Generate new JWT token - ENSURE userId is a number
+    // Generate new JWT token
     const newToken = jwt.sign(
       { 
-        userId: Number(tokenData.UserID), // Force as number
+        userId: tokenData.UserID,
         username: tokenData.Username,
         email: tokenData.Email,
         role: tokenData.Role
@@ -397,46 +397,18 @@ const logout = async (req, res) => {
 };
 
 /**
- * Get authenticated user profile - FIXED VERSION
+ * Get authenticated user profile
  */
 const getProfile = async (req, res) => {
   try {
     // User ID should come from the authenticated middleware
-    const userId = req.user?.userId;
-    
-    // Enhanced error logging
-    console.log('Profile fetch request from user:', {
-      userId: userId,
-      type: typeof userId,
-      headers: req.headers['user-agent']
-    });
-    
-    // FIXED: Ensure userId is a valid number before using with SQL Server
-    let userIdNumber;
-    
-    try {
-      // Try multiple conversion methods
-      userIdNumber = Number(userId);
-      
-      // Check if it's a valid number
-      if (isNaN(userIdNumber)) {
-        console.error('Profile fetch: Invalid userId format:', userId);
-        return res.status(400).json({ 
-          message: 'Invalid user ID format' 
-        });
-      }
-    } catch (conversionError) {
-      console.error('Profile fetch: userId conversion error:', conversionError);
-      return res.status(400).json({ 
-        message: 'Error processing user ID'
-      });
-    }
+    const userId = req.user.userId;
     
     const pool = await poolPromise;
     
-    // Get user details using the numeric userId
+    // Get user details
     const userResult = await pool.request()
-      .input('userId', sql.Int, userIdNumber) // Use the converted numeric value
+      .input('userId', sql.Int, userId)
       .query(`
         SELECT UserID, Username, Email, FirstName, LastName, Role, CreatedAt, LastLogin
         FROM Users
@@ -487,15 +459,9 @@ const changePassword = async (req, res) => {
     
     const pool = await poolPromise;
     
-    // FIXED: Ensure userId is a number
-    const userIdNumber = Number(userId);
-    if (isNaN(userIdNumber)) {
-      return res.status(400).json({ message: 'Invalid user ID format' });
-    }
-    
     // Get current password hash
     const userResult = await pool.request()
-      .input('userId', sql.Int, userIdNumber)
+      .input('userId', sql.Int, userId)
       .query(`
         SELECT PasswordHash
         FROM Users
@@ -521,7 +487,7 @@ const changePassword = async (req, res) => {
     
     // Update password
     await pool.request()
-      .input('userId', sql.Int, userIdNumber)
+      .input('userId', sql.Int, userId)
       .input('passwordHash', sql.NVarChar, newPasswordHash)
       .query(`
         UPDATE Users
@@ -531,7 +497,7 @@ const changePassword = async (req, res) => {
     
     // Revoke all existing refresh tokens for security
     await pool.request()
-      .input('userId', sql.Int, userIdNumber)
+      .input('userId', sql.Int, userId)
       .query(`
         UPDATE RefreshTokens
         SET RevokedAt = GETDATE()
@@ -652,19 +618,13 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Token has expired or already been used' });
     }
     
-    // FIXED: Ensure userId is a number
-    const userIdNumber = Number(tokenData.UserID);
-    if (isNaN(userIdNumber)) {
-      return res.status(400).json({ message: 'Invalid user ID format in token' });
-    }
-    
     // Hash new password
     const saltRounds = 10;
     const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
     
     // Update password and mark token as used
     await pool.request()
-      .input('userId', sql.Int, userIdNumber)
+      .input('userId', sql.Int, tokenData.UserID)
       .input('passwordHash', sql.NVarChar, newPasswordHash)
       .input('tokenId', sql.Int, tokenData.TokenID)
       .query(`
@@ -711,18 +671,12 @@ const updateProfile = async (req, res) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    // FIXED: Ensure userId is a number
-    const userIdNumber = Number(userId);
-    if (isNaN(userIdNumber)) {
-      return res.status(400).json({ message: 'Invalid user ID format' });
-    }
-
     // Check if email is already used by another user
     if (email) {
       const pool = await poolPromise;
       const emailCheck = await pool.request()
         .input('email', sql.NVarChar, email)
-        .input('userId', sql.Int, userIdNumber)
+        .input('userId', sql.Int, userId)
         .query(`
           SELECT UserID FROM Users
           WHERE Email = @email AND UserID != @userId
@@ -736,7 +690,7 @@ const updateProfile = async (req, res) => {
     // Update user profile
     const pool = await poolPromise;
     await pool.request()
-      .input('userId', sql.Int, userIdNumber)
+      .input('userId', sql.Int, userId)
       .input('firstName', sql.NVarChar, firstName || null)
       .input('lastName', sql.NVarChar, lastName || null)
       .input('email', sql.NVarChar, email)
@@ -751,7 +705,7 @@ const updateProfile = async (req, res) => {
 
     // Get updated user data
     const userResult = await pool.request()
-      .input('userId', sql.Int, userIdNumber)
+      .input('userId', sql.Int, userId)
       .query(`
         SELECT UserID, Username, Email, FirstName, LastName, Role, CreatedAt, LastLogin
         FROM Users

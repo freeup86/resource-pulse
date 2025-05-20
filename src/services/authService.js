@@ -226,20 +226,74 @@ const getProfileAfterRefresh = async () => {
       throw new Error('No authentication token available after refresh');
     }
     
-    const response = await axios({
-      method: 'GET',
-      url: `${apiUrl}/auth/profile`,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      },
-      params: { _t: new Date().getTime() } // Add cache buster
-    });
+    // Validate token format to prevent parsing issues
+    if (typeof token !== 'string' || token.trim() === '') {
+      console.error('Profile fetch after refresh: Invalid token format');
+      throw new Error('Invalid authentication token format after refresh');
+    }
     
-    return response.data;
+    // Add retry mechanism with exponential backoff
+    let retries = 0;
+    const maxRetries = 3;
+    let lastError = null;
+    
+    while (retries < maxRetries) {
+      try {
+        console.log(`Profile fetch after refresh: Attempt ${retries + 1} of ${maxRetries}`);
+        
+        const response = await axios({
+          method: 'GET',
+          url: `${apiUrl}/auth/profile`,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          params: { _t: new Date().getTime(), retry: retries } // Add cache buster with retry counter
+        });
+        
+        console.log('Profile fetch after refresh: Success');
+        return response.data;
+      } catch (err) {
+        lastError = err;
+        retries++;
+        
+        // Log more detailed error information
+        if (err.response) {
+          console.error(`Profile fetch retry ${retries}: Server error:`, {
+            status: err.response.status,
+            data: err.response.data
+          });
+        } else if (err.request) {
+          console.error(`Profile fetch retry ${retries}: No response:`, err.request);
+        } else {
+          console.error(`Profile fetch retry ${retries}: Request error:`, err.message);
+        }
+        
+        if (retries < maxRetries) {
+          const delay = Math.pow(2, retries) * 1000; // Exponential backoff: 2s, 4s, 8s
+          console.log(`Profile fetch after refresh: Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    console.error('Profile fetch after refresh failed after all retries:', lastError);
+    throw lastError || new Error('Profile fetch failed after maximum retries');
   } catch (error) {
     console.error('Profile fetch after refresh failed:', error);
+    
+    // If the error is just "wt" or another very short string, it's likely a token parsing issue
+    if (typeof error === 'string' && error.length < 5) {
+      console.error('Profile fetch after refresh: Detected token parsing error:', error);
+      // Clear the problematic token
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      throw new Error('Authentication token error. Please log in again.');
+    }
+    
     throw error;
   }
 };
