@@ -3,12 +3,10 @@ const { shouldUseMock, resourceService } = require('../mockDataService');
 
 // Utility function to format skills with proficiency levels
 const formatSkills = (skills) => {
-  console.log('Formatting skills:', JSON.stringify(skills, null, 2));
 
   const formattedSkills = skills.map(skill => {
     // Check if ProficiencyLevel property exists and has a value
     if ('ProficiencyLevel' in skill && skill.ProficiencyLevel) {
-      console.log(`Skill ${skill.Name} has proficiency ${skill.ProficiencyLevel}`);
       return {
         name: skill.Name,
         proficiencyLevel: skill.ProficiencyLevel
@@ -17,7 +15,6 @@ const formatSkills = (skills) => {
     return skill.Name;
   });
 
-  console.log('Formatted skills:', JSON.stringify(formattedSkills, null, 2));
   return formattedSkills;
 };
 
