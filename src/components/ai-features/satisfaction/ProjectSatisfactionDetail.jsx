@@ -228,7 +228,7 @@ const ProjectSatisfactionDetail = ({ project, factors, pairings }) => {
                   
                   <p className="text-gray-700">
                     Based on our analysis, this project currently has a client satisfaction score of {project.overallSatisfaction.score}/100, 
-                    which indicates a {project.overallSatisfaction.riskLevel} risk level. The score is calculated from 
+                    which indicates a {project.overallSatisfaction.riskLevel} risk level. The score is calculated from&nbsp; 
                     {project.overallSatisfaction.totalResources} resources allocated to this project.
                   </p>
                   

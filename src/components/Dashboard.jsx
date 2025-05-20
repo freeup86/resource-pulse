@@ -7,7 +7,6 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import UtilizationChart from './dashboard/UtilizationChart';
 import SkillsAnalysis from './dashboard/SkillsAnalysis';
-import AvailabilityForecast from './dashboard/AvailabilityForecast';
 import MiniTimeline from './dashboard/MiniTimeline';
 import FinancialSummary from './dashboard/FinancialSummary';
 
@@ -119,10 +118,6 @@ const Dashboard = () => {
         <MiniTimeline />
       </div>
       
-      <div className="mb-6">
-        <AvailabilityForecast />
-      </div>
-      
       {/* Quick Links */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Link to="/resources" className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
@@ -155,12 +150,12 @@ const Dashboard = () => {
           </div>
         </Link>
         
-        <Link to="/financial-reports" className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
+        <Link to="/ai/finance" className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
           <div className="flex items-center">
             <DollarSign className="h-8 w-8 text-emerald-500" />
             <div className="ml-4">
-              <h3 className="font-medium">Financial Reports</h3>
-              <p className="text-sm text-gray-500">Review project financials and budget tracking</p>
+              <h3 className="font-medium">Financial Optimization</h3>
+              <p className="text-sm text-gray-500">AI-powered financial analysis and optimization</p>
             </div>
           </div>
         </Link>

@@ -33,6 +33,7 @@ import DataFixTest from './components/ai-features/finance/DataFixTest';
 import SkillsGapPage from './components/ai-features/skills-gap/SkillsGapPage';
 import DocumentProcessingPage from './components/ai-features/document-processor/DocumentProcessingPage';
 import ClientSatisfactionPage from './components/ai-features/satisfaction/ClientSatisfactionPage';
+import WhatIfScenarioPage from './components/whatif/WhatIfScenarioPage';
 
 // Auth Components
 import LoginPage from './components/auth/LoginPage';
@@ -104,6 +105,7 @@ function App() {
                         <Route path="/ai/skills" element={<SkillsGapPage />} />
                         <Route path="/ai/documents" element={<DocumentProcessingPage />} />
                         <Route path="/ai/satisfaction" element={<ClientSatisfactionPage />} />
+                        <Route path="/whatif" element={<WhatIfScenarioPage />} />
                       </Routes>
                     </MainLayout>
                   </ProtectedRoute>

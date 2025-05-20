@@ -18,6 +18,7 @@ const importRoutes = require('./routes/importRoutes');
 const syncRoutes = require('./routes/syncRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const capacityRoutes = require('./routes/capacityRoutes');
+const whatIfScenarioRoutes = require('./routes/whatIfScenarioRoutes');  // What-If scenario planning routes
 const notificationRoutes = require('./routes/notificationRoutes');
 const aiRecommendationRoutes = require('./routes/aiRecommendationRoutes');
 const skillRecommendationRoutes = require('./routes/skillRecommendationRoutes');
@@ -52,124 +53,57 @@ if (process.env.USE_MOCK_DATA === undefined) {
   process.env.USE_MOCK_DATA = process.env.NODE_ENV === 'development' ? 'true' : 'false';
 }
 
-// Route validation to catch path-to-regexp errors
-const validateRoutes = (router) => {
-  try {
-    // Safe wrapper to validate route patterns before they're used
-    const originalGet = router.get;
-    const originalPost = router.post;
-    const originalPut = router.put;
-    const originalDelete = router.delete;
-
-    // Wrap route methods to validate patterns
-    router.get = function(path, ...handlers) {
-      if (typeof path === 'string' && path.includes('/:')) {
-        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
-          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
-          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
-        }
-      }
-      return originalGet.call(this, path, ...handlers);
-    };
-
-    router.post = function(path, ...handlers) {
-      if (typeof path === 'string' && path.includes('/:')) {
-        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
-          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
-          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
-        }
-      }
-      return originalPost.call(this, path, ...handlers);
-    };
-
-    router.put = function(path, ...handlers) {
-      if (typeof path === 'string' && path.includes('/:')) {
-        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
-          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
-          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
-        }
-      }
-      return originalPut.call(this, path, ...handlers);
-    };
-
-    router.delete = function(path, ...handlers) {
-      if (typeof path === 'string' && path.includes('/:')) {
-        if (path.includes('/:/') || path.includes('/::/') || path.includes('/: ')) {
-          console.error(`Invalid route detected: ${path} - Contains empty parameter name`);
-          path = path.replace('/:/', '/:param/').replace('/::', '/:param:').replace('/: ', '/:param ');
-        }
-      }
-      return originalDelete.call(this, path, ...handlers);
-    };
-
-    return router;
-  } catch (error) {
-    console.error('Error validating routes:', error);
-    return router;
-  }
-};
-
 // Create Express app
 const app = express();
 
-// Direct fix for path-to-regexp error - patches express route methods
+/**
+ * Sanitizes route paths to prevent path-to-regexp errors
+ * @param {string|RegExp} path - Route path to sanitize
+ * @returns {string|RegExp} - Sanitized path
+ */
 function sanitizeRoutePath(path) {
   if (typeof path === 'string') {
     // Replace any potential route pattern issues
     return path
-      .replace(/\/:(\W|$)/g, '/_fixed_param$1')  // Fix empty parameter names
-      .replace(/\/:\//g, '/_fixed_param/');      // Fix parameter followed by slash
+      .replace(/\/:(\W|$)/g, '/:param$1')  // Fix empty parameter names
+      .replace(/\/:\//g, '/:param/')       // Fix parameter followed by slash
+      .replace(/\/::/g, '/:param:')        // Fix parameter followed by colon
+      .replace(/\/: /g, '/:param ');       // Fix parameter followed by space
   }
   return path;
 }
 
-// Patch route methods to sanitize paths
-const originalAppGet = app.get;
-const originalAppPost = app.post;
-const originalAppPut = app.put;
-const originalAppDelete = app.delete;
+/**
+ * Patches a route method to use sanitized paths
+ * @param {Function} original - Original route method
+ * @returns {Function} - Patched route method
+ */
+function patchRouteMethod(original) {
+  return function(path, ...handlers) {
+    return original.call(this, sanitizeRoutePath(path), ...handlers);
+  };
+}
 
-app.get = function(path, ...handlers) {
-  return originalAppGet.call(this, sanitizeRoutePath(path), ...handlers);
-};
+// Patch app route methods
+app.get = patchRouteMethod(app.get);
+app.post = patchRouteMethod(app.post);
+app.put = patchRouteMethod(app.put);
+app.delete = patchRouteMethod(app.delete);
+app.patch = patchRouteMethod(app.patch);
+app.all = patchRouteMethod(app.all);
 
-app.post = function(path, ...handlers) {
-  return originalAppPost.call(this, sanitizeRoutePath(path), ...handlers);
-};
-
-app.put = function(path, ...handlers) {
-  return originalAppPut.call(this, sanitizeRoutePath(path), ...handlers);
-};
-
-app.delete = function(path, ...handlers) {
-  return originalAppDelete.call(this, sanitizeRoutePath(path), ...handlers);
-};
-
-// Patch express.Router as well
+// Patch express.Router 
 const originalRouter = express.Router;
 express.Router = function() {
   const router = originalRouter.apply(this, arguments);
   
-  const originalRouterGet = router.get;
-  const originalRouterPost = router.post;
-  const originalRouterPut = router.put;
-  const originalRouterDelete = router.delete;
-  
-  router.get = function(path, ...handlers) {
-    return originalRouterGet.call(this, sanitizeRoutePath(path), ...handlers);
-  };
-  
-  router.post = function(path, ...handlers) {
-    return originalRouterPost.call(this, sanitizeRoutePath(path), ...handlers);
-  };
-  
-  router.put = function(path, ...handlers) {
-    return originalRouterPut.call(this, sanitizeRoutePath(path), ...handlers);
-  };
-  
-  router.delete = function(path, ...handlers) {
-    return originalRouterDelete.call(this, sanitizeRoutePath(path), ...handlers);
-  };
+  // Patch router methods
+  router.get = patchRouteMethod(router.get);
+  router.post = patchRouteMethod(router.post);
+  router.put = patchRouteMethod(router.put);
+  router.delete = patchRouteMethod(router.delete);
+  router.patch = patchRouteMethod(router.patch);
+  router.all = patchRouteMethod(router.all);
   
   return router;
 };
@@ -180,11 +114,38 @@ express.Router = function() {
 const corsOptions = {
   origin: ['https://resource-pulse.onrender.com', 'http://localhost:3000', 'http://localhost:8001'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Origin', 
+    'X-Requested-With', 
+    'Content-Type', 
+    'Accept', 
+    'Authorization', 
+    'Cache-Control', 
+    'Pragma', 
+    'Expires',
+    'Access-Control-Allow-Origin',
+    'Access-Control-Allow-Methods',
+    'Access-Control-Allow-Headers'
+  ],
+  exposedHeaders: ['Content-Length', 'Content-Type', 'Authorization']
 };
 
+// Apply CORS middleware
 app.use(cors(corsOptions));
+
+// Handle preflight requests for all routes
+app.options('*', cors(corsOptions));
+
+// Add custom CORS headers for any failed preflight checks
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
+  res.header('Access-Control-Allow-Headers', 
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, Expires');
+  res.header('Access-Control-Max-Age', '86400'); // 24 hours
+  next();
+});
 
 // Other middleware
 app.use(helmet({
@@ -192,9 +153,6 @@ app.use(helmet({
 }));
 app.use(morgan('dev')); // Logging
 app.use(express.json()); // Parse JSON bodies
-
-// For preflight requests
-app.options('*', cors(corsOptions));
 
 // Base route
 app.get('/', (req, res) => {
@@ -212,6 +170,7 @@ app.use('/api/import', importRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/capacity', capacityRoutes);
+app.use('/api/whatif', whatIfScenarioRoutes);  // What-If scenario planning routes
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ai', aiRecommendationRoutes);  // AI recommendation routes
 app.use('/api/skill-recommendations', skillRecommendationRoutes);  // Skill recommendation routes

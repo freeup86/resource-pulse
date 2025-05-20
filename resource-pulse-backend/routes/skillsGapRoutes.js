@@ -27,4 +27,7 @@ router.get('/training-recommendations', skillsGapController.getTrainingRecommend
 // Get hiring recommendations
 router.get('/hiring-recommendations', skillsGapController.getHiringRecommendations);
 
+// Diagnostic endpoint to check skills data status
+router.get('/data-status', skillsGapController.checkSkillsDataStatus);
+
 module.exports = router;

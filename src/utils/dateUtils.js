@@ -40,31 +40,57 @@ export const formatCurrency = (value, currencyCode = 'USD') => {
 };
 
 // Format a date to display format
-export const formatDate = (dateStr) => {
-  if (!dateStr) return 'N/A';
+export const formatDate = (dateInput) => {
+  if (!dateInput) return 'N/A';
 
   try {
-    // Parse ISO date string
-    const parsedDate = parseISO(dateStr);
-
-    if (!isValid(parsedDate)) {
-      // Fallback to regular Date constructor if parseISO fails
-      const fallbackDate = new Date(dateStr);
-      if (!isValid(fallbackDate)) return 'Invalid Date';
-      return format(fallbackDate, 'MMM dd, yyyy');
+    // If the input is already a Date object
+    if (dateInput instanceof Date) {
+      if (!isValid(dateInput)) return 'Invalid Date';
+      
+      // Create a new date object using UTC components to avoid timezone issues
+      const utcDate = new Date(
+        dateInput.getFullYear(),
+        dateInput.getMonth(),
+        dateInput.getDate(),
+        12 // Set to noon to avoid any potential day boundary issues
+      );
+      
+      return format(utcDate, 'MMM dd, yyyy');
     }
+    
+    // If the input is a string
+    if (typeof dateInput === 'string') {
+      // Parse ISO date string
+      const parsedDate = parseISO(dateInput);
 
-    // Create a new date object using UTC components to avoid timezone issues
-    // This ensures that a date like "2024-01-01T00:00:00.000Z" is displayed as "Jan 01, 2024"
-    // rather than potentially "Dec 31, 2023" depending on the local timezone
-    const utcDate = new Date(
-      parsedDate.getUTCFullYear(),
-      parsedDate.getUTCMonth(),
-      parsedDate.getUTCDate(),
-      12 // Set to noon to avoid any potential day boundary issues
-    );
+      if (!isValid(parsedDate)) {
+        // Fallback to regular Date constructor if parseISO fails
+        const fallbackDate = new Date(dateInput);
+        if (!isValid(fallbackDate)) return 'Invalid Date';
+        return format(fallbackDate, 'MMM dd, yyyy');
+      }
 
-    return format(utcDate, 'MMM dd, yyyy');
+      // Create a new date object using UTC components to avoid timezone issues
+      const utcDate = new Date(
+        parsedDate.getUTCFullYear(),
+        parsedDate.getUTCMonth(),
+        parsedDate.getUTCDate(),
+        12 // Set to noon to avoid any potential day boundary issues
+      );
+
+      return format(utcDate, 'MMM dd, yyyy');
+    }
+    
+    // If it's a number (timestamp)
+    if (typeof dateInput === 'number') {
+      const dateFromTimestamp = new Date(dateInput);
+      if (!isValid(dateFromTimestamp)) return 'Invalid Date';
+      return format(dateFromTimestamp, 'MMM dd, yyyy');
+    }
+    
+    // If we get here, the input is of an unsupported type
+    return 'Invalid Date Format';
   } catch (error) {
     console.error('Error formatting date:', error);
     return 'Invalid Date';

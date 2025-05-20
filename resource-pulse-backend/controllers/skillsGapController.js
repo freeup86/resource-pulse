@@ -3,6 +3,7 @@
  * Handles API endpoints for skills gap analysis functionality
  */
 const skillsGapService = require('../services/skillsGapService');
+const { sql, poolPromise } = require('../db/config');
 
 /**
  * Analyze organization-wide skills gap
@@ -768,6 +769,228 @@ const getHiringRecommendationsFallback = () => {
   };
 };
 
+/**
+ * Diagnostic endpoint to check skills data status
+ */
+const checkSkillsDataStatus = async (req, res) => {
+  try {
+    // Attempt to get counts from the actual tables
+    const tables = [
+      { name: 'Skills', label: 'Skills', casePreserved: 'Skills' },
+      { name: 'ResourceSkills', label: 'Resource Skills', casePreserved: 'ResourceSkills' },
+      { name: 'ProjectSkills', label: 'Project Skills', casePreserved: 'ProjectSkills' },
+      { name: 'market_skill_trends', label: 'Market Skill Trends', casePreserved: 'market_skill_trends' },
+      { name: 'Resources', label: 'Resources', casePreserved: 'Resources' },
+      { name: 'Projects', label: 'Projects', casePreserved: 'Projects' }
+    ];
+    
+    const tableCounts = {};
+    
+    // Get counts for each table
+    for (const table of tables) {
+      try {
+        const pool = await poolPromise;
+        // First check if table exists
+        const tableExistsResult = await pool.request().query(
+          `SELECT OBJECT_ID('${table.casePreserved}') as table_id`
+        );
+        
+        if (tableExistsResult.recordset[0].table_id) {
+          const result = await pool.request().query(`SELECT COUNT(*) as count FROM ${table.casePreserved}`);
+          tableCounts[table.name] = {
+            exists: true,
+            count: result.recordset[0].count,
+            label: table.label
+          };
+        } else {
+          tableCounts[table.name] = {
+            exists: false,
+            error: `Table ${table.casePreserved} does not exist`,
+            label: table.label
+          };
+        }
+      } catch (error) {
+        tableCounts[table.name] = {
+          exists: false,
+          error: error.message,
+          label: table.label
+        };
+      }
+    }
+    
+    // Check for upcoming projects (demand basis)
+    let upcomingProjects = 0;
+    try {
+      if (tableCounts['Projects']?.exists) {
+        const pool = await poolPromise;
+        const result = await pool.request().query(
+          `SELECT COUNT(*) as count FROM Projects WHERE EndDate >= GETDATE()`
+        );
+        upcomingProjects = result.recordset[0].count;
+      }
+    } catch (error) {
+      console.error('Error checking upcoming projects:', error);
+    }
+    
+    // Check for project-skill assignments
+    let projectsWithSkills = 0;
+    try {
+      if (tableCounts['ProjectSkills']?.exists) {
+        const pool = await poolPromise;
+        const result = await pool.request().query(
+          `SELECT COUNT(DISTINCT ProjectID) as count FROM ProjectSkills`
+        );
+        projectsWithSkills = result.recordset[0].count;
+      }
+    } catch (error) {
+      console.error('Error checking projects with skills:', error);
+    }
+    
+    // Check for resources with skills
+    let resourcesWithSkills = 0;
+    try {
+      if (tableCounts['ResourceSkills']?.exists) {
+        const pool = await poolPromise;
+        const result = await pool.request().query(
+          `SELECT COUNT(DISTINCT ResourceID) as count FROM ResourceSkills`
+        );
+        resourcesWithSkills = result.recordset[0].count;
+      }
+    } catch (error) {
+      console.error('Error checking resources with skills:', error);
+    }
+    
+    // Get sample data from key tables to help with debugging
+    const samples = {};
+    
+    if (tableCounts['ResourceSkills']?.exists && tableCounts['ResourceSkills']?.count > 0) {
+      try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+          SELECT TOP 5 rs.ResourceID, r.Name as resource_name, rs.SkillID, 
+                 s.Name as skill_name, rs.ProficiencyLevelID as proficiency_level
+          FROM ResourceSkills rs
+          JOIN Resources r ON rs.ResourceID = r.ResourceID
+          JOIN Skills s ON rs.SkillID = s.SkillID
+        `);
+        samples.resourceSkills = result.recordset;
+      } catch (error) {
+        samples.resourceSkills = { error: error.message };
+      }
+    }
+    
+    if (tableCounts['ProjectSkills']?.exists && tableCounts['ProjectSkills']?.count > 0) {
+      try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+          SELECT TOP 5 ps.ProjectID, p.Name as project_name, ps.SkillID, 
+                 s.Name as skill_name, ps.Priority as importance_level
+          FROM ProjectSkills ps
+          JOIN Projects p ON ps.ProjectID = p.ProjectID
+          JOIN Skills s ON ps.SkillID = s.SkillID
+        `);
+        samples.projectSkills = result.recordset;
+      } catch (error) {
+        samples.projectSkills = { error: error.message };
+      }
+    }
+    
+    // Test the skills gap analysis with force fallback ON and OFF 
+    // to verify if real calculation works
+    let realDataAnalysis, forcedFallbackAnalysis;
+    
+    try {
+      // Try with real data
+      realDataAnalysis = await skillsGapService.analyzeOrganizationSkillsGap({
+        includeAIInsights: false,
+        timeRange: '6months'
+      });
+      
+      // Force fallback
+      forcedFallbackAnalysis = await skillsGapService.analyzeOrganizationSkillsGap({
+        includeAIInsights: false,
+        timeRange: '6months',
+        forceFallback: true
+      });
+    } catch (error) {
+      console.error('Error testing skills gap analysis:', error);
+    }
+    
+    // Determine if we're using real data or fallback
+    const usingRealData = (
+      tableCounts['ResourceSkills']?.count > 0 &&
+      tableCounts['ProjectSkills']?.count > 0 &&
+      upcomingProjects > 0 &&
+      resourcesWithSkills > 0 &&
+      projectsWithSkills > 0 &&
+      realDataAnalysis?.gapAnalysis
+    );
+    
+    // Add instructions for setting up missing tables
+    const setupInstructions = [];
+    
+    if (!tableCounts['Skills']?.exists) {
+      setupInstructions.push("Create the Skills table using db/skills-enhancement.sql");
+    }
+    
+    if (!tableCounts['ResourceSkills']?.exists) {
+      setupInstructions.push("Create the ResourceSkills table using db/skills-enhancement.sql");
+    }
+    
+    if (!tableCounts['ProjectSkills']?.exists) {
+      setupInstructions.push("Create the ProjectSkills table using db/skills-enhancement.sql");
+    }
+    
+    if (!tableCounts['market_skill_trends']?.exists) {
+      setupInstructions.push("Create the market_skill_trends table using db/skills-gap-tables.sql");
+    }
+    
+    res.json({
+      status: 'success',
+      usingRealData: usingRealData,
+      dataStatus: {
+        tableCounts,
+        upcomingProjects,
+        projectsWithSkills,
+        resourcesWithSkills
+      },
+      samples,
+      analysisTest: {
+        realDataWorks: !!realDataAnalysis?.gapAnalysis,
+        fallbackWorks: !!forcedFallbackAnalysis?.gapAnalysis,
+        realDataSummary: realDataAnalysis ? {
+          overallGapScore: realDataAnalysis.gapAnalysis.overallGapScore,
+          criticalGapsCount: realDataAnalysis.gapAnalysis.immediateGaps.filter(g => g.gapSeverity === 'critical').length,
+          highGapsCount: realDataAnalysis.gapAnalysis.immediateGaps.filter(g => g.gapSeverity === 'high').length
+        } : null
+      },
+      requirements: {
+        hasResources: tableCounts['Resources']?.count > 0,
+        hasProjects: tableCounts['Projects']?.count > 0,
+        hasSkills: tableCounts['Skills']?.count > 0,
+        hasResourceSkills: tableCounts['ResourceSkills']?.count > 0,
+        hasProjectSkills: tableCounts['ProjectSkills']?.count > 0,
+        hasMarketTrends: tableCounts['market_skill_trends']?.exists && tableCounts['market_skill_trends']?.count > 0,
+        hasUpcomingProjects: upcomingProjects > 0,
+        resourcesWithSkillsCount: resourcesWithSkills,
+        projectsWithSkillsCount: projectsWithSkills
+      },
+      recommendations: [
+        resourcesWithSkills === 0 ? "Add skills to resources with appropriate proficiency levels" : null,
+        projectsWithSkills === 0 ? "Add skill requirements to projects with importance levels" : null,
+        upcomingProjects === 0 ? "Ensure some projects have end dates in the future (that's what demand is based on)" : null
+      ].filter(Boolean),
+      setupInstructions
+    });
+  } catch (error) {
+    console.error('Error checking skills data status:', error);
+    res.status(500).json({ 
+      error: 'Failed to check skills data status', 
+      details: error.message 
+    });
+  }
+};
+
 module.exports = {
   analyzeOrganizationSkillsGap,
   analyzeDepartmentSkillsGap,
@@ -775,5 +998,6 @@ module.exports = {
   getAllDepartmentsGapAnalysis,
   getSkillsGapAnalysis,
   getTrainingRecommendations,
-  getHiringRecommendations
+  getHiringRecommendations,
+  checkSkillsDataStatus
 };

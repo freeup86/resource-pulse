@@ -355,27 +355,32 @@ const ProjectDetail = ({ project }) => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utilization</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {assignedResources.map((resource) => {
-                    // Find the allocation for this project
-                    const allocationForProject = resource.allocations 
-                      ? resource.allocations.find(a => a && a.projectId === project.id)
+                  {/* Get all allocations for this project across all resources, including multiple allocations per resource */}
+                  {assignedResources.flatMap(resource => {
+                    // Get all allocations for this resource and project
+                    const allocationsForProject = resource.allocations 
+                      ? resource.allocations.filter(a => a && a.projectId === project.id)
                       : (resource.allocation && resource.allocation.projectId === project.id 
-                          ? resource.allocation 
-                          : null);
+                          ? [resource.allocation] 
+                          : []);
                     
-                    if (!allocationForProject) return null;
-                    
-                    return (
-                      <tr key={resource.id}>
+                    // Map each allocation to a table row
+                    return allocationsForProject.map((allocation, allocIndex) => (
+                      <tr key={`${resource.id}-${allocation.id || allocIndex}`}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="font-medium text-gray-900">
                             <Link to={`/resources/${resource.id}`} className="text-blue-600 hover:underline">
                               {resource.name}
+                              {allocationsForProject.length > 1 && (
+                                <span className="text-xs text-gray-500 ml-1">
+                                  (Allocation {allocIndex + 1}/{allocationsForProject.length})
+                                </span>
+                              )}
                             </Link>
                           </div>
                         </td>
@@ -383,18 +388,23 @@ const ProjectDetail = ({ project }) => {
                           {resource.roleName || resource.role}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <UtilizationBar percentage={allocationForProject.utilization} />
+                          <UtilizationBar percentage={allocation.utilization} />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <div>{formatDate(allocationForProject.endDate)}</div>
+                          <div>
+                            <span className="text-xs text-gray-500">Start:</span> {formatDate(allocation.startDate)}
+                          </div>
+                          <div>
+                            <span className="text-xs text-gray-500">End:</span> {formatDate(allocation.endDate)}
+                          </div>
                           <div className={`text-xs ${
-                            calculateDaysUntilEnd(allocationForProject.endDate) <= 7
+                            calculateDaysUntilEnd(allocation.endDate) <= 7
                               ? "text-red-600"
-                              : calculateDaysUntilEnd(allocationForProject.endDate) <= 14
+                              : calculateDaysUntilEnd(allocation.endDate) <= 14
                               ? "text-yellow-600"
                               : "text-gray-500"
                           }`}>
-                            {calculateDaysUntilEnd(allocationForProject.endDate)} days left
+                            {calculateDaysUntilEnd(allocation.endDate)} days left
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -406,7 +416,7 @@ const ProjectDetail = ({ project }) => {
                           </Link>
                         </td>
                       </tr>
-                    );
+                    ));
                   })}
                 </tbody>
               </table>

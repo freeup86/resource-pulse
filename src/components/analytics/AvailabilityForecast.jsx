@@ -92,8 +92,13 @@ const AvailabilityForecast = ({ resources }) => {
             <XAxis 
               dataKey="date" 
               tickFormatter={(value) => {
-                const parts = value.split(', ');
-                return parts[0];
+                // Handle string values safely
+                if (typeof value === 'string' && value.includes(', ')) {
+                  const parts = value.split(', ');
+                  return parts[0];
+                }
+                // Return the value as is if it's not a string with the expected format
+                return value;
               }}
               angle={-45}
               textAnchor="end"

@@ -5,6 +5,7 @@ import { ProjectProvider } from './ProjectContext';
 import { RoleProvider } from './RoleContext';
 import { SettingsProvider } from './SettingsContext';
 import { CapacityProvider } from './CapacityContext';
+import { WhatIfScenarioProvider } from './WhatIfScenarioContext';
 import { UserProvider } from './UserContext';
 
 const AppProvider = ({ children }) => {
@@ -15,7 +16,9 @@ const AppProvider = ({ children }) => {
           <ProjectProvider>
             <RoleProvider>
               <CapacityProvider>
-                {children}
+                <WhatIfScenarioProvider>
+                  {children}
+                </WhatIfScenarioProvider>
               </CapacityProvider>
             </RoleProvider>
           </ProjectProvider>

@@ -1,25 +1,38 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import * as authService from '../../services/authService';
 import EditProfileForm from './EditProfileForm';
 import ChangePasswordForm from './ChangePasswordForm';
 
 const ProfilePage = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, isAuthenticated } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const navigate = useNavigate();
 
-  // Fetch profile data on component mount only
+  // Check if user is logged in before fetching profile
   useEffect(() => {
+    // Immediately redirect if not authenticated
+    if (!authService.isLoggedIn()) {
+      navigate('/login', { replace: true, state: { from: '/profile', message: 'You must be logged in to view your profile.' } });
+      return;
+    }
+    
     let isMounted = true;
     
     const fetchProfile = async () => {
       try {
         if (!isMounted) return;
         setLoading(true);
+        
+        // Check if token exists before making the API call
+        if (!authService.getToken()) {
+          throw new Error('Authentication required. Please log in to view your profile.');
+        }
         
         // Call the API service directly with a cache buster
         const profileData = await authService.getProfile();
@@ -30,7 +43,23 @@ const ProfilePage = () => {
       } catch (err) {
         if (!isMounted) return;
         console.error('Error fetching profile:', err);
-        setError('Failed to load profile data. Please try again later.');
+        
+        // Special handling for authentication errors
+        if (err.message.includes('authentication') || err.message.includes('token')) {
+          setError('Your session has expired. Please log in again to view your profile.');
+          
+          // Clear any stale auth data
+          authService.logout().catch(e => console.error('Logout error:', e));
+          
+          // Redirect to login after a brief delay to show the error message
+          setTimeout(() => {
+            if (isMounted) {
+              navigate('/login', { replace: true });
+            }
+          }, 3000);
+        } else {
+          setError('Failed to load profile data. Please try again later.');
+        }
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -57,11 +86,31 @@ const ProfilePage = () => {
     try {
       setLoading(true);
       setError(null);
+      
+      // Check if token exists before making the API call
+      if (!authService.getToken()) {
+        throw new Error('Authentication required. Please log in to view your profile.');
+      }
+      
       const refreshedProfile = await authService.getProfile();
       setProfile(refreshedProfile);
     } catch (err) {
       console.error('Error refreshing profile:', err);
-      setError('Failed to refresh profile data. Please try again later.');
+      
+      // Special handling for authentication errors
+      if (err.message.includes('authentication') || err.message.includes('token')) {
+        setError('Your session has expired. Please log in again to view your profile.');
+        
+        // Clear any stale auth data and redirect to login
+        authService.logout().catch(e => console.error('Logout error:', e));
+        
+        // Redirect to login after a brief delay
+        setTimeout(() => {
+          navigate('/login', { replace: true });
+        }, 2000);
+      } else {
+        setError('Failed to refresh profile data. Please try again later.');
+      }
     } finally {
       setLoading(false);
     }
@@ -86,6 +135,12 @@ const ProfilePage = () => {
           className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
         >
           Try Again
+        </button>
+        <button 
+          onClick={() => navigate('/login')} 
+          className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded ml-4"
+        >
+          Go to Login
         </button>
       </div>
     );
@@ -113,6 +168,23 @@ const ProfilePage = () => {
     );
   }
 
+  // Safeguard in case profile and currentUser are both null/undefined
+  if (!profile && !currentUser) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6" role="alert">
+          <p>User data not available. Please log in again.</p>
+        </div>
+        <button 
+          onClick={() => navigate('/login')} 
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+        >
+          Go to Login
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-3xl font-bold mb-6">User Profile</h1>
@@ -127,7 +199,7 @@ const ProfilePage = () => {
                 </span>
               ) : (
                 <span className="text-3xl font-bold text-gray-600">
-                  {currentUser?.username?.charAt(0).toUpperCase() || 'U'}
+                  {currentUser?.username?.charAt(0).toUpperCase() || profile?.username?.charAt(0).toUpperCase() || 'U'}
                 </span>
               )}
             </div>

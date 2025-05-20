@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, Settings, Bell, Lightbulb, LogOut, User } from 'lucide-react';
+import { Menu, Settings, Bell, Lightbulb, LogOut, User, GitBranch } from 'lucide-react';
 import NotificationCenter from '../notifications/NotificationCenter';
 import { getUnreadCount } from '../../services/notificationService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -56,6 +56,7 @@ const Header = () => {
             <li><Link to="/resources" className="hover:underline">Resources</Link></li>
             <li><Link to="/projects" className="hover:underline">Projects</Link></li>
             <li><Link to="/timeline" className="hover:underline">Timeline</Link></li>
+            <li><Link to="/whatif" className="hover:underline flex items-center"><GitBranch className="h-4 w-4 mr-1" />What-If</Link></li>
           </ul>
           
           {/* AI Features dropdown */}
@@ -85,39 +86,11 @@ const Header = () => {
                   Project Risk Analysis
                 </Link>
                 <Link 
-                  to="/ai/search" 
-                  className="block px-4 py-2 hover:bg-blue-100"
-                  onClick={() => setIsAiMenuOpen(false)}
-                >
-                  Natural Language Search
-                </Link>
-                <Link 
-                  to="/ai/finance" 
-                  className="block px-4 py-2 hover:bg-blue-100"
-                  onClick={() => setIsAiMenuOpen(false)}
-                >
-                  Financial Optimization
-                </Link>
-                <Link 
                   to="/ai/skills" 
                   className="block px-4 py-2 hover:bg-blue-100"
                   onClick={() => setIsAiMenuOpen(false)}
                 >
                   Skills Gap Analysis
-                </Link>
-                <Link 
-                  to="/ai/documents" 
-                  className="block px-4 py-2 hover:bg-blue-100"
-                  onClick={() => setIsAiMenuOpen(false)}
-                >
-                  Document Processing
-                </Link>
-                <Link 
-                  to="/ai/satisfaction" 
-                  className="block px-4 py-2 hover:bg-blue-100"
-                  onClick={() => setIsAiMenuOpen(false)}
-                >
-                  Client Satisfaction
                 </Link>
               </div>
             )}
@@ -269,12 +242,24 @@ const Header = () => {
                   </Link>
                 </li>
                 <li>
-                  <Link 
-                    to="/timeline" 
+                  <Link
+                    to="/timeline"
                     className="block p-2 hover:bg-blue-700 rounded"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Timeline
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/whatif"
+                    className="block p-2 hover:bg-blue-700 rounded"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <div className="flex items-center">
+                      <GitBranch className="h-4 w-4 mr-2" />
+                      What-If Scenario Planning
+                    </div>
                   </Link>
                 </li>
                 
@@ -302,47 +287,11 @@ const Header = () => {
                 </li>
                 <li>
                   <Link 
-                    to="/ai/search" 
-                    className="block p-2 hover:bg-blue-700 rounded ml-2"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Natural Language Search
-                  </Link>
-                </li>
-                <li>
-                  <Link 
-                    to="/ai/finance" 
-                    className="block p-2 hover:bg-blue-700 rounded ml-2"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Financial Optimization
-                  </Link>
-                </li>
-                <li>
-                  <Link 
                     to="/ai/skills" 
                     className="block p-2 hover:bg-blue-700 rounded ml-2"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Skills Gap Analysis
-                  </Link>
-                </li>
-                <li>
-                  <Link 
-                    to="/ai/documents" 
-                    className="block p-2 hover:bg-blue-700 rounded ml-2"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Document Processing
-                  </Link>
-                </li>
-                <li>
-                  <Link 
-                    to="/ai/satisfaction" 
-                    className="block p-2 hover:bg-blue-700 rounded ml-2"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Client Satisfaction
                   </Link>
                 </li>
                 

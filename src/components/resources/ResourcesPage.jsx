@@ -56,7 +56,13 @@ const ResourcesPage = () => {
         return (
           resource.name.toLowerCase().includes(searchTermLower) ||
           resource.role.toLowerCase().includes(searchTermLower) ||
-          resource.skills.some(skill => skill.toLowerCase().includes(searchTermLower))
+          (resource.skills && Array.isArray(resource.skills) && resource.skills.some(skill =>
+            typeof skill === 'string'
+              ? skill.toLowerCase().includes(searchTermLower)
+              : skill && typeof skill === 'object' && skill.name
+                ? skill.name.toLowerCase().includes(searchTermLower)
+                : false
+          ))
         );
       }
       

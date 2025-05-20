@@ -1,6 +1,6 @@
 // auth.js - Authentication middleware
 const jwt = require('jsonwebtoken');
-const { poolPromise } = require('../db/config');
+const { poolPromise, sql } = require('../db/config');
 
 // Get JWT secret from environment variables
 const JWT_SECRET = process.env.JWT_SECRET || 'resource-pulse-secret-key';

@@ -17,7 +17,10 @@ const ProjectForm = ({ project = null, onClose }) => {
     requiredRoles: [], // Array of {roleId, count} objects
     roleInput: { roleId: '', count: 1 },
     startDate: '',
-    endDate: ''
+    endDate: '',
+    budget: '',
+    currency: 'USD',
+    financialNotes: ''
   });
   const [errors, setErrors] = useState({});
 
@@ -74,6 +77,9 @@ const ProjectForm = ({ project = null, onClose }) => {
         });
       }
 
+      // Get budget-related data if available
+      const financials = project.financials || {};
+      
       setFormData({
         name: project.name,
         client: project.client,
@@ -85,7 +91,10 @@ const ProjectForm = ({ project = null, onClose }) => {
         requiredRoles: formattedRoles,
         roleInput: { roleId: '', count: 1 },
         startDate: formattedStartDate,
-        endDate: formattedEndDate
+        endDate: formattedEndDate,
+        budget: financials.budget || '',
+        currency: financials.currency || 'USD',
+        financialNotes: financials.financialNotes || ''
       });
     }
   }, [project]);
@@ -220,7 +229,11 @@ const ProjectForm = ({ project = null, onClose }) => {
       // The backend will parse them correctly without timezone issues
       startDate: formData.startDate || null,
       endDate: formData.endDate || null,
-      status: 'Active' // Make sure status is included
+      status: 'Active', // Make sure status is included
+      // Financial data
+      budget: formData.budget ? parseFloat(formData.budget) : null,
+      currency: formData.currency || 'USD',
+      financialNotes: formData.financialNotes || null
     };
     
     // Log the project data for debugging
@@ -335,6 +348,53 @@ const ProjectForm = ({ project = null, onClose }) => {
                 onChange={handleChange}
                 className="w-full p-2 border border-gray-300 rounded"
               />
+            </div>
+          </div>
+          
+          {/* Budget Information Section */}
+          <div className="mt-6 mb-4">
+            <h3 className="text-md font-medium text-gray-800 mb-2">Budget Information</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Budget</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  name="budget"
+                  value={formData.budget}
+                  onChange={handleChange}
+                  placeholder="Enter project budget"
+                  className="w-full p-2 border border-gray-300 rounded"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                <select
+                  name="currency"
+                  value={formData.currency}
+                  onChange={handleChange}
+                  className="w-full p-2 border border-gray-300 rounded"
+                >
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                  <option value="CAD">CAD</option>
+                  <option value="AUD">AUD</option>
+                  <option value="JPY">JPY</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Financial Notes</label>
+              <textarea
+                name="financialNotes"
+                value={formData.financialNotes}
+                onChange={handleChange}
+                placeholder="Add notes about project finances, payment schedule, etc."
+                className="w-full p-2 border border-gray-300 rounded"
+                rows="2"
+              ></textarea>
             </div>
           </div>
           

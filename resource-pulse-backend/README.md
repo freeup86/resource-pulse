@@ -17,9 +17,52 @@ npm install
 # Initialize the database
 node db/setup-db-from-scratch.js
 
+# Set up skills gap analysis tables
+npm run fix-skills-gap-tables
+
 # Start the development server
 npm run dev
 ```
+
+### Skills Gap Analysis
+
+The Skills Gap Analysis feature provides insights into:
+
+- Organization-wide skills gaps
+- Department-specific skills gaps
+- Resource-specific skills gaps
+- Training recommendations
+- Hiring recommendations
+
+#### Required Data
+
+For the Skills Gap Analysis to work with real data:
+
+1. **Skills Data**: Make sure the Skills table is populated
+2. **Resources with Skills**: Assign skills to resources in the ResourceSkills table
+3. **Projects with Skill Requirements**: Define skill requirements for projects in the ProjectSkills table
+4. **Future Projects**: Ensure some projects have end dates in the future (that's what demand is based on)
+
+#### Diagnostic Tool
+
+A diagnostic endpoint is available to check the status of your skills data:
+
+```
+GET /api/skills-gap/data-status
+```
+
+This will show:
+- Which tables exist and have data
+- Whether resources have skills assigned
+- Whether projects have skill requirements
+- Specific recommendations on what data to add
+
+#### Fallback Behavior
+
+If real data calculation fails or lacks sufficient data, the system will automatically fall back to sample data. You'll know you're seeing fallback data when:
+
+1. The response header includes `X-Using-Fallback-Data: true`
+2. The diagnostic endpoint shows `usingRealData: false`
 
 ### Development Setup with Mock Data
 

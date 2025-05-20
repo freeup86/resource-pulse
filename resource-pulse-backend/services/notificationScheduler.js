@@ -312,8 +312,10 @@ const checkCapacityThresholds = async () => {
     const defaultThreshold = parseInt(settingResult.recordset[0]?.SettingValue) || 90;
     
     // Get current allocations and total utilization for each resource
-    const result = await pool.request()
-      .query(`
+    const request = pool.request();
+    request.input('defaultThreshold', sql.Int, defaultThreshold);
+    
+    const result = await request.query(`
         WITH ResourceUtilization AS (
           SELECT 
             r.ResourceID,
@@ -342,8 +344,7 @@ const checkCapacityThresholds = async () => {
           AND n.NotificationTypeID = (SELECT NotificationTypeID FROM NotificationTypes WHERE Name = 'capacity_threshold')
           AND n.CreatedAt > DATEADD(day, -1, GETDATE())
         )
-      `)
-      .input('defaultThreshold', sql.Int, defaultThreshold);
+      `);
     
     console.log(`Found ${result.recordset.length} resources exceeding capacity thresholds`);
     
