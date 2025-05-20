@@ -184,13 +184,6 @@ const login = async (req, res) => {
     
     const user = userResult.recordset[0];
     
-    console.log('Auth Debug: Login user data from database:', {
-      UserID: user.UserID,
-      UserIDType: typeof user.UserID,
-      Username: user.Username,
-      Email: user.Email,
-      Role: user.Role
-    });
     
     // Check if user is active
     if (!user.IsActive) {
@@ -265,12 +258,6 @@ const login = async (req, res) => {
       role: user.Role
     };
     
-    console.log('Auth Debug: Login token payload being signed:', {
-      userId: tokenPayload.userId,
-      userIdType: typeof tokenPayload.userId,
-      isNaN: isNaN(tokenPayload.userId),
-      originalUserID: user.UserID
-    });
     
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
     
@@ -336,10 +323,6 @@ const refreshToken = async (req, res) => {
         WHERE rt.Token = @token
       `);
     
-    console.log('Auth Debug: Refresh token query result:', {
-      recordCount: tokenResult.recordset.length,
-      tokenData: tokenResult.recordset[0]
-    });
     
     if (tokenResult.recordset.length === 0) {
       return res.status(401).json({ message: 'Invalid refresh token' });
@@ -365,13 +348,6 @@ const refreshToken = async (req, res) => {
       role: tokenData.Role
     };
     
-    console.log('Auth Debug: Refresh token payload being signed:', {
-      userId: refreshTokenPayload.userId,
-      userIdType: typeof refreshTokenPayload.userId,
-      isNaN: isNaN(refreshTokenPayload.userId),
-      originalUserID: tokenData.UserID,
-      tokenDataKeys: Object.keys(tokenData)
-    });
     
     const newToken = jwt.sign(refreshTokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
     
