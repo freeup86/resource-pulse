@@ -104,18 +104,49 @@ const ProfilePage = () => {
       setLoading(true);
       setError(null);
       
+      console.log('ProfilePage: Manual profile refresh requested');
+      
       // Check if token exists before making the API call
-      if (!authService.getToken()) {
+      const token = authService.getToken();
+      if (!token) {
+        console.error('ProfilePage: No authentication token available');
         throw new Error('Authentication required. Please log in to view your profile.');
       }
       
+      // First try to refresh the token to ensure we have a fresh one
+      try {
+        console.log('ProfilePage: Attempting to refresh token before profile fetch');
+        await authService.refreshToken();
+        console.log('ProfilePage: Token refresh successful');
+      } catch (refreshError) {
+        console.error('ProfilePage: Token refresh failed:', refreshError);
+        // Continue anyway and try to fetch with existing token
+      }
+      
+      // Now fetch the profile with the possibly refreshed token
+      console.log('ProfilePage: Fetching profile data after token refresh attempt');
       const refreshedProfile = await authService.getProfile();
+      console.log('ProfilePage: Profile data refreshed successfully');
+      
       setProfile(refreshedProfile);
     } catch (err) {
       console.error('Error refreshing profile:', err);
       
+      // Enhanced error logging
+      console.error('ProfilePage: Detailed refresh error info:', {
+        message: err?.message || 'Unknown error',
+        type: typeof err,
+        name: err?.name,
+        stack: err?.stack
+      });
+      
       // Special handling for authentication errors
-      if (err.message.includes('authentication') || err.message.includes('token')) {
+      if (err.message?.includes('authentication') || 
+          err.message?.includes('token') || 
+          err.message?.includes('wt') || 
+          err.message?.length < 5) {
+        
+        console.log('ProfilePage: Authentication error detected during refresh');
         setError('Your session has expired. Please log in again to view your profile.');
         
         // Clear any stale auth data and redirect to login

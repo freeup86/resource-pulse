@@ -4,7 +4,7 @@ dotenv.config();
 // Import sql module
 const sql = require('mssql');
 
-// Database configuration
+// Enhanced configuration with better security defaults
 const config = {
   server: process.env.DB_SERVER,
   database: process.env.DB_NAME || process.env.DB_DATABASE, // Support both naming conventions
@@ -12,10 +12,14 @@ const config = {
   password: process.env.DB_PASSWORD,
   port: parseInt(process.env.DB_PORT, 10) || 1433,
   options: {
-    encrypt: process.env.DB_ENCRYPT === 'true', // For Azure
+    encrypt: process.env.DB_ENCRYPT !== 'false', // Default to true for security
     trustServerCertificate: process.env.DB_TRUST_CERT === 'true', // For local dev / self-signed certs
     enableArithAbort: true,
-    connectionTimeout: 30000
+    connectionTimeout: 30000,
+    // Add TLS version constraint for better security
+    cryptoCredentialsDetails: {
+      minVersion: 'TLSv1.2'
+    }
   },
   pool: {
     max: 10,
@@ -24,7 +28,7 @@ const config = {
   }
 };
 
-// Connection pool
+// Enhanced connection pool with retry logic for encryption errors
 const poolPromise = new sql.ConnectionPool(config)
   .connect()
   .then(pool => {
@@ -33,6 +37,27 @@ const poolPromise = new sql.ConnectionPool(config)
   })
   .catch(err => {
     console.error('Database Connection Failed:', err);
+    
+    // If encryption is required by server but not set, retry with encryption
+    if (err.code === 'EENCRYPT' && config.options.encrypt !== true) {
+      console.log('Server requires encryption, retrying with encrypt=true...');
+      
+      // Update config to force encryption
+      config.options.encrypt = true;
+      
+      // Retry connection
+      return new sql.ConnectionPool(config)
+        .connect()
+        .then(pool => {
+          console.log('Connected to SQL Server with encryption');
+          return pool;
+        })
+        .catch(retryErr => {
+          console.error('Database Connection Failed on retry:', retryErr);
+          throw retryErr;
+        });
+    }
+    
     throw err; // Let the application handle this error properly
   });
 

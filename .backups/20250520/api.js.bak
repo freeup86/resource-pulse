@@ -1,0 +1,95 @@
+import axios from 'axios';
+
+// In production, use the configured backend URL
+// This will be the URL of your backend service on Render
+const API_URL = process.env.REACT_APP_API_URL || 'https://resource-pulse-backend.onrender.com/api';
+
+console.log('Using API URL:', API_URL);
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  },
+  // Ensure cookies are sent with requests for any authentication needs
+  withCredentials: true,
+  // Add timeout to prevent hanging requests
+  timeout: 30000
+});
+
+// Check and validate token before API requests
+api.interceptors.request.use(config => {
+  // Add timestamp parameter to avoid caching
+  const timestamp = new Date().getTime();
+  config.params = { ...config.params, _t: timestamp };
+  
+  // Check if auth header is being added and validate token format
+  if (config.headers.Authorization) {
+    const authHeader = config.headers.Authorization;
+    const tokenParts = authHeader.split(' ');
+    
+    if (tokenParts.length !== 2 || tokenParts[0] !== 'Bearer' || !tokenParts[1] || tokenParts[1].length < 10) {
+      console.error('Invalid token format detected in request:', { 
+        header: authHeader,
+        url: config.url
+      });
+      
+      // Remove the invalid token to prevent parsing errors
+      delete config.headers.Authorization;
+      
+      // If we're making an authenticated request without a proper token,
+      // we can force a token refresh or redirect to login here
+      if (!config.url.includes('/auth/login') && !config.url.includes('/auth/refresh-token')) {
+        // Don't throw here to avoid breaking normal request flow
+        // The 401 response will trigger auth error handling
+        console.warn('Request with invalid token will likely fail:', config.url);
+      }
+    }
+  }
+  
+  return config;
+}, error => {
+  console.error('API Request Error:', error);
+  return Promise.reject(error);
+});
+
+// Add response interceptor to handle common errors
+api.interceptors.response.use(
+  response => response,
+  error => {
+    // Enhanced error logging with extra checks to prevent crash on malformed errors
+    if (error.response) {
+      console.error('API Response Error:', {
+        status: error.response.status,
+        url: error.config?.url,
+        data: error.response.data,
+        method: error.config?.method
+      });
+    } else if (error.request) {
+      console.error('API No Response Error:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        timeout: error.config?.timeout
+      });
+    } else {
+      console.error('API Setup Error:', typeof error === 'object' ? error.message : error);
+    }
+    
+    // Handle token errors with specific error types
+    if (error.message === 'wt' || 
+        (typeof error.message === 'string' && error.message.length < 5)) {
+      console.error('API Token Parsing Error Detected:', error.message);
+      // Create a more helpful error for easier handling
+      const tokenError = new Error('Authentication token format error');
+      tokenError.name = 'TokenFormatError';
+      return Promise.reject(tokenError);
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+export default api;
