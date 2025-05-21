@@ -6,14 +6,18 @@ import App from './App';
 // Create a function to register service worker for PWA functionality
 const registerServiceWorker = () => {
   if ('serviceWorker' in navigator) {
+    // Wait until the page is fully loaded
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/service-worker.js')
-        .then(registration => {
-          console.log('Service Worker registered: ', registration);
-        })
-        .catch(error => {
-          console.log('Service Worker registration failed: ', error);
-        });
+      // Use a timeout to avoid message channel closing error
+      setTimeout(() => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(registration => {
+            console.log('Service Worker registered: ', registration);
+          })
+          .catch(error => {
+            console.log('Service Worker registration failed: ', error);
+          });
+      }, 1000);
     });
   }
 };

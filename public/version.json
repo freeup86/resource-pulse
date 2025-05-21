@@ -1,9 +1,9 @@
 {
-  "version": "0.1.3",
-  "buildNumber": "72",
-  "commitHash": "f9524e31978b99d8c0d590cb667220b2f6866de8",
-  "commitHashShort": "f9524e3",
-  "commitDate": "2025-05-21 12:22:41",
-  "commitMessage": "Fix DateRangeFilter to support multiple interfaces and resolve utilization forecast date picker issue",
-  "buildDate": "2025-05-21 12:22:41"
+  "version": "0.1.4",
+  "buildNumber": "73",
+  "commitHash": "122b668f6acd62b4ce2ab5e6028190a24ab8e26c",
+  "commitHashShort": "122b668",
+  "commitDate": "2025-05-21 13:46:48",
+  "commitMessage": "Implement quick wins across the application",
+  "buildDate": "2025-05-21 13:46:48"
 }

@@ -173,16 +173,20 @@ const BurndownChart = () => {
           <div className="mb-4 text-sm flex justify-between">
             <div>
               <div className="text-gray-500">Total Budget:</div>
-              <div className="font-medium">${selectedProject.financials?.budget.toLocaleString()}</div>
+              <div className="font-medium">
+                ${(selectedProject.financials?.budget || 0).toLocaleString()}
+              </div>
             </div>
             <div>
               <div className="text-gray-500">Spent To Date:</div>
-              <div className="font-medium">${selectedProject.financials?.actualCost.toLocaleString()}</div>
+              <div className="font-medium">
+                ${(selectedProject.financials?.actualCost || 0).toLocaleString()}
+              </div>
             </div>
             <div>
               <div className="text-gray-500">Remaining:</div>
               <div className="font-medium">
-                ${(selectedProject.financials?.budget - selectedProject.financials?.actualCost).toLocaleString()}
+                ${((selectedProject.financials?.budget || 0) - (selectedProject.financials?.actualCost || 0)).toLocaleString()}
               </div>
             </div>
           </div>

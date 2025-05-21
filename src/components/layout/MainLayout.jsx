@@ -38,8 +38,10 @@ const MainLayout = ({ children }) => {
   // Handle PWA install prompt
   useEffect(() => {
     const handleBeforeInstallPrompt = (e) => {
-      // Prevent the mini-infobar from appearing on mobile
-      e.preventDefault();
+      console.log('Before install prompt triggered');
+      // Don't prevent default here to avoid the error
+      // e.preventDefault();
+      
       // Store the event so it can be triggered later
       setDeferredPrompt(e);
       // Show install UI
