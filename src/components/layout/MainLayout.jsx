@@ -1,5 +1,6 @@
 import React from 'react';
 import Header from './Header';
+import Footer from './Footer';
 
 const MainLayout = ({ children }) => {
   return (
@@ -8,9 +9,7 @@ const MainLayout = ({ children }) => {
       <main className="flex-grow container mx-auto p-4">
         {children}
       </main>
-      <footer className="bg-gray-100 p-4 text-center text-gray-500 text-sm">
-        <p>© {new Date().getFullYear()} ResourcePulse. All rights reserved.</p>
-      </footer>
+      <Footer />
     </div>
   );
 };

@@ -25,7 +25,7 @@ const VersionInfo = () => {
       {/* Version trigger button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center text-xs text-gray-300 hover:text-white transition-colors duration-200"
+        className="flex items-center text-xs text-gray-400 hover:text-gray-200 transition-colors duration-200"
         title="Version Information"
       >
         <Info className="h-3 w-3 mr-1" />

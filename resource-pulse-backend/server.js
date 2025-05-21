@@ -33,6 +33,7 @@ const skillsGapRoutes = require('./routes/skillsGapRoutes');  // Skills gap anal
 const documentProcessingRoutes = require('./routes/documentProcessingRoutes');  // Document processing routes
 const clientSatisfactionRoutes = require('./routes/clientSatisfactionRoutes');  // Client satisfaction prediction routes
 const authRoutes = require('./routes/authRoutes');  // Authentication routes
+const versionRoutes = require('./routes/versionRoutes');  // Version information routes
 const scheduledSyncService = require('./services/scheduledSyncService');
 const settingsController = require('./controllers/settingsController');
 const notificationService = require('./services/notificationService');
@@ -184,6 +185,7 @@ app.use('/api/financial', financialOptimizationRoutes);  // Financial optimizati
 app.use('/api/skills-gap', skillsGapRoutes);  // Skills gap analysis routes
 app.use('/api/documents', documentProcessingRoutes);  // Document processing routes
 app.use('/api/satisfaction', clientSatisfactionRoutes);  // Client satisfaction prediction routes
+app.use('/api/version', versionRoutes);  // Version information routes
 
 // Initialize system settings before starting server
 try {
