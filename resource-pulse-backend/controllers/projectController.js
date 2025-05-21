@@ -1325,13 +1325,14 @@ exports.deleteProject = async (req, res) => {
     
     const projectName = checkProject.recordset[0].Name;
     
-    // Check if project has allocations
+    // Check if project has active allocations (not expired)
     const checkAllocations = await pool.request()
       .input('projectId', sql.Int, id)
       .query(`
         SELECT COUNT(*) AS AllocationCount 
         FROM Allocations 
         WHERE ProjectID = @projectId
+        AND EndDate >= GETDATE()
       `);
     
     if (checkAllocations.recordset[0].AllocationCount > 0) {

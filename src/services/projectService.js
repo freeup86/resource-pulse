@@ -72,6 +72,19 @@ export const deleteProject = async (id) => {
     return response.data;
   } catch (error) {
     console.error(`Error deleting project ${id}:`, error);
+    
+    // Extract the specific error message from the backend response
+    if (error.response && error.response.data && error.response.data.message) {
+      const errorMessage = error.response.data.message;
+      console.error('Backend error message:', errorMessage);
+      
+      // Create a more informative error object
+      const enhancedError = new Error(errorMessage);
+      enhancedError.originalError = error;
+      enhancedError.status = error.response.status;
+      throw enhancedError;
+    }
+    
     throw error;
   }
 };

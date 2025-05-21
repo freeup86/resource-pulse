@@ -1559,11 +1559,63 @@ const getMatchesForProject = async (pool, projectId) => {
   };
 };
 
+// Get expired allocations
+const getExpiredAllocations = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    
+    // Get expired allocations with resource and project details
+    const result = await pool.request()
+      .query(`
+        SELECT 
+          a.AllocationID,
+          a.ResourceID,
+          r.Name as ResourceName,
+          r.Role as ResourceRole,
+          a.ProjectID,
+          p.Name as ProjectName,
+          p.Client,
+          a.StartDate,
+          a.EndDate,
+          a.Utilization,
+          DATEDIFF(day, a.EndDate, GETDATE()) as DaysExpired
+        FROM Allocations a
+        INNER JOIN Resources r ON a.ResourceID = r.ResourceID
+        INNER JOIN Projects p ON a.ProjectID = p.ProjectID
+        WHERE a.EndDate < GETDATE()
+        ORDER BY a.EndDate DESC
+      `);
+    
+    const expiredAllocations = result.recordset.map(alloc => ({
+      id: alloc.AllocationID,
+      resourceId: alloc.ResourceID,
+      resourceName: alloc.ResourceName,
+      resourceRole: alloc.ResourceRole,
+      projectId: alloc.ProjectID,
+      projectName: alloc.ProjectName,
+      client: alloc.Client,
+      startDate: alloc.StartDate,
+      endDate: alloc.EndDate,
+      utilization: alloc.Utilization,
+      daysExpired: alloc.DaysExpired
+    }));
+    
+    res.json(expiredAllocations);
+  } catch (err) {
+    console.error('Error getting expired allocations:', err);
+    res.status(500).json({
+      message: 'Error retrieving expired allocations',
+      error: process.env.NODE_ENV === 'production' ? {} : err.message
+    });
+  }
+};
+
 // Exports
 module.exports = {
   updateAllocation,
   getResourceAllocations,
   getResourcesEndingSoon,
   getResourceMatches,
-  removeAllocation
+  removeAllocation,
+  getExpiredAllocations
 };

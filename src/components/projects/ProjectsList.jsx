@@ -25,17 +25,15 @@ const ProjectsList = ({ onEdit }) => {
     }).length;
   };
   
-  const handleDelete = (id) => {
-    // Check if there are resources assigned to this project
-    const hasAssignedResources = getAssignedResourceCount(id) > 0;
-    
-    if (hasAssignedResources) {
-      alert('Cannot delete project with assigned resources. Please reassign resources first.');
-      return;
-    }
-    
+  const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this project?')) {
-      deleteProject(id);
+      try {
+        await deleteProject(id);
+      } catch (err) {
+        // Show the specific error message from the backend
+        const errorMessage = err.message || 'Failed to delete project';
+        alert(errorMessage);
+      }
     }
   };
   

@@ -159,8 +159,10 @@ export const ProjectProvider = ({ children }) => {
       await projectService.deleteProject(projectId);
       dispatch({ type: 'DELETE_PROJECT', payload: projectId });
     } catch (err) {
-      setError('Failed to delete project');
-      console.error(err);
+      // Use the specific error message from the backend if available
+      const errorMessage = err.message || 'Failed to delete project';
+      setError(errorMessage);
+      console.error(`Error deleting project ${projectId}:`, err);
       throw err;
     }
   };

@@ -17,4 +17,7 @@ router.get('/matches', allocationController.getResourceMatches);
 // GET /api/allocations/resource/:resourceId - Get resource allocations
 router.get('/resource/:resourceId', allocationController.getResourceAllocations);
 
+// GET /api/allocations/expired - Get expired allocations
+router.get('/expired', allocationController.getExpiredAllocations);
+
 module.exports = router;
