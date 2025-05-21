@@ -12,9 +12,17 @@ export const getSettings = async () => {
     // Convert from {key: {value, description}} to {key: value} format for easier use
     const formattedSettings = {};
     Object.entries(response.data).forEach(([key, data]) => {
-      formattedSettings[key] = data.value;
+      // Parse boolean values directly
+      if (data.dataType === 'boolean') {
+        formattedSettings[key] = data.value === true || data.value === 'true';
+      } else if (data.dataType === 'number') {
+        formattedSettings[key] = typeof data.value === 'number' ? data.value : parseFloat(data.value);
+      } else {
+        formattedSettings[key] = data.value;
+      }
     });
     
+    console.log('Fetched settings:', formattedSettings);
     return formattedSettings;
   } catch (error) {
     console.error('Error fetching settings:', error);
@@ -55,9 +63,17 @@ export const updateSettings = async (settings) => {
     // Convert from {key: {value, description}} to {key: value} format for easier use
     const formattedSettings = {};
     Object.entries(response.data).forEach(([key, data]) => {
-      formattedSettings[key] = data.value;
+      // Parse boolean values directly
+      if (data.dataType === 'boolean') {
+        formattedSettings[key] = data.value === true || data.value === 'true';
+      } else if (data.dataType === 'number') {
+        formattedSettings[key] = typeof data.value === 'number' ? data.value : parseFloat(data.value);
+      } else {
+        formattedSettings[key] = data.value;
+      }
     });
     
+    console.log('Updated settings:', formattedSettings);
     return formattedSettings;
   } catch (error) {
     console.error('Error updating settings:', error);

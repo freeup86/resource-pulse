@@ -1,9 +1,9 @@
 {
-  "version": "0.1.4",
-  "buildNumber": "73",
-  "commitHash": "122b668f6acd62b4ce2ab5e6028190a24ab8e26c",
-  "commitHashShort": "122b668",
-  "commitDate": "2025-05-21 13:46:48",
-  "commitMessage": "Implement quick wins across the application",
-  "buildDate": "2025-05-21 13:46:48"
+  "version": "0.1.5",
+  "buildNumber": "74",
+  "commitHash": "1b9f34e4ea006998401ef7f322dd47934b647b25",
+  "commitHashShort": "1b9f34e",
+  "commitDate": "2025-05-21 13:48:40",
+  "commitMessage": "Fix runtime errors in new components",
+  "buildDate": "2025-05-21 13:48:40"
 }

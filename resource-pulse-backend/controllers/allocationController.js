@@ -22,6 +22,32 @@ const getMaxUtilizationPercentage = async (pool) => {
   }
 };
 
+// Helper function to check if overallocation is allowed
+const getAllowOverallocation = async (pool) => {
+  try {
+    const result = await pool.request()
+      .query(`
+        SELECT SettingValue 
+        FROM SystemSettings 
+        WHERE SettingKey = 'allowOverallocation'
+      `);
+    
+    console.log('getAllowOverallocation query result:', result.recordset);
+    
+    if (result.recordset.length > 0) {
+      // Convert string 'true' or 'false' to boolean
+      const value = result.recordset[0].SettingValue === 'true' || result.recordset[0].SettingValue === '1';
+      console.log('allowOverallocation parsed value:', value);
+      return value;
+    }
+    console.log('allowOverallocation setting not found, returning false');
+    return false; // Default value if setting not found
+  } catch (err) {
+    console.error('Error fetching allow overallocation setting:', err);
+    return false; // Default value on error
+  }
+};
+
 // Create or update an allocation
 const updateAllocation = async (req, res) => {
   try {
@@ -108,8 +134,18 @@ const updateAllocation = async (req, res) => {
     
     const pool = await poolPromise;
     
-    // Get the max utilization percentage from settings
+    // Get the max utilization percentage and overallocation settings
     const maxUtilizationPercentage = await getMaxUtilizationPercentage(pool);
+    const allowOverallocation = await getAllowOverallocation(pool);
+    
+    console.log('Allocation validation settings:', {
+      maxUtilizationPercentage,
+      allowOverallocation,
+      resourceId,
+      utilization,
+      startDate,
+      endDate
+    });
     
     // Start a transaction
     const transaction = new sql.Transaction(pool);
@@ -176,11 +212,25 @@ const updateAllocation = async (req, res) => {
       
       const existingUtilization = utilizationCheck.recordset[0].TotalUtilization || 0;
       
-      // Use the max utilization from settings instead of hardcoded 100
-      if (existingUtilization + utilization > maxUtilizationPercentage) {
+      // Check if we need to enforce utilization limit
+      // If overallocation is not allowed, limit to 100%
+      // If overallocation is allowed, use the configured max utilization percentage
+      const utilizationLimit = allowOverallocation ? maxUtilizationPercentage : 100;
+      
+      console.log('Utilization validation:', {
+        existingUtilization,
+        newUtilization: utilization,
+        totalWouldBe: existingUtilization + utilization,
+        utilizationLimit,
+        allowOverallocation,
+        maxUtilizationPercentage
+      });
+      
+      if (existingUtilization + utilization > utilizationLimit) {
         await transaction.rollback();
+        console.log('Allocation rejected due to utilization limit exceeded');
         return res.status(400).json({ 
-          message: `This allocation would exceed ${maxUtilizationPercentage}% utilization. Current utilization in this period: ${existingUtilization}%` 
+          message: `This allocation would exceed ${utilizationLimit}% utilization. Current utilization in this period: ${existingUtilization}%. Overallocation ${allowOverallocation ? 'is' : 'is not'} allowed.` 
         });
       }
       

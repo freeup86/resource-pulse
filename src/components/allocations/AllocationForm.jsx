@@ -44,10 +44,36 @@ const AllocationForm = ({
   const currentTotalUtilization = resource ? 
     calculateTotalUtilization(resource) - (allocation ? (allocation.utilization || 0) : 0) : 0;
   
-  // Set maximum available utilization, allowing overallocation up to the admin-defined threshold
-  const availableUtilization = maxUtilization !== null ? 
-    maxUtilization : 
-    Math.max(0, systemMaxUtilization - currentTotalUtilization);
+  // Set maximum available utilization based on settings
+  // If overallocation is allowed, use system max, otherwise limit to remaining capacity
+  const allowOverallocation = settings.allowOverallocation;
+  
+  // Debug logging
+  console.log('AllocationForm settings debug:', {
+    allowOverallocation,
+    systemMaxUtilization,
+    currentTotalUtilization,
+    resource: resource?.name,
+    resourceId
+  });
+  
+  // Calculate available utilization
+  let availableUtilization;
+  if (allowOverallocation) {
+    // When overallocation is allowed, the max allocation for this specific allocation
+    // is the systemMaxUtilization minus current utilization from other projects
+    availableUtilization = Math.max(0, systemMaxUtilization - currentTotalUtilization);
+  } else {
+    // When overallocation is not allowed, limit to 100% total
+    availableUtilization = Math.max(0, 100 - currentTotalUtilization);
+  }
+  
+  // If maxUtilization prop is provided and is more restrictive, use it only if overallocation is disabled
+  if (maxUtilization !== null && !allowOverallocation) {
+    availableUtilization = Math.min(availableUtilization, maxUtilization);
+  }
+  
+  console.log('Calculated availableUtilization:', availableUtilization);
 
   // Format date for input without adding a day
   const formatDateForInput = (dateString) => {
@@ -167,9 +193,14 @@ const AllocationForm = ({
       onClose();
     } catch (err) {
       console.error('Error in allocation form submission:', err);
+      console.error('Error response data:', err.response?.data);
+      console.error('Error response status:', err.response?.status);
+      
       if (err.response && err.response.status === 400) {
+        const errorMessage = err.response.data?.message || `Failed to allocate resource. Allocation would exceed ${systemMaxUtilization}% utilization.`;
+        console.error('Backend error message:', errorMessage);
         setErrors({
-          submit: err.response.data?.message || `Failed to allocate resource. Allocation would exceed ${systemMaxUtilization}% utilization.`
+          submit: errorMessage
         });
       } else {
         setErrors({

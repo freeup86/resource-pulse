@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useResources } from '../../contexts/ResourceContext';
 import { useProjects } from '../../contexts/ProjectContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { formatDate, calculateDaysUntilEnd } from '../../utils/dateUtils';
 import { calculateTotalUtilization } from '../../utils/allocationUtils';
 import UtilizationBar from '../common/UtilizationBar';
@@ -10,9 +11,17 @@ const AllocationList = ({ resource }) => {
   const [showForm, setShowForm] = useState(false);
   const [selectedAllocation, setSelectedAllocation] = useState(null);
   const { projects } = useProjects();
+  const { settings } = useSettings();
   
   // Calculate total utilization using the utility function
   const totalUtilization = calculateTotalUtilization(resource);
+  
+  // Check if allocation is allowed based on settings
+  const systemMaxUtilization = settings.maxUtilizationPercentage || 100;
+  const allowOverallocation = settings.allowOverallocation;
+  const canAddAllocation = allowOverallocation ? 
+    totalUtilization < systemMaxUtilization : 
+    totalUtilization < 100;
   
   // Get all allocations
   const allocations = resource.allocations || [];
@@ -114,7 +123,7 @@ const AllocationList = ({ resource }) => {
       ) : (
         <div className="bg-gray-50 p-4 rounded-lg mt-2 text-center">
           <p className="text-gray-500">This resource is currently unallocated</p>
-          {totalUtilization < 100 && (
+          {canAddAllocation && (
             <button 
               onClick={handleAddAllocation}
               className="mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
@@ -128,7 +137,6 @@ const AllocationList = ({ resource }) => {
       {showForm && (
         <AllocationForm 
           resourceId={resource.id}
-          maxUtilization={100 - (totalUtilization - (selectedAllocation ? selectedAllocation.utilization : 0))}
           allocation={selectedAllocation}
           onClose={handleCloseForm}
         />

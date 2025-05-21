@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useResources } from '../../contexts/ResourceContext';
 import { useProjects } from '../../contexts/ProjectContext';
 import { useSkills } from '../../contexts/SkillsContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { formatDate, calculateDaysUntilEnd } from '../../utils/dateUtils';
 import { calculateTotalUtilization } from '../../utils/allocationUtils';
 import SkillTag from '../common/SkillTag';
@@ -20,6 +21,7 @@ const ResourceDetail = () => {
   const { resources, loading: resourcesLoading, error: resourcesError, deleteResource } = useResources();
   const { projects } = useProjects();
   const { skills } = useSkills();
+  const { settings } = useSettings();
   const [showAllocationForm, setShowAllocationForm] = useState(false);
   const [showCertificationForm, setShowCertificationForm] = useState(false);
   const [selectedAllocation, setSelectedAllocation] = useState(null);
@@ -57,6 +59,13 @@ const ResourceDetail = () => {
     if (!resource) return 0;
     return calculateTotalUtilization(resource);
   }, [resource]);
+  
+  // Check if allocation is allowed based on settings
+  const systemMaxUtilization = settings.maxUtilizationPercentage || 100;
+  const allowOverallocation = settings.allowOverallocation;
+  const canAddAllocation = allowOverallocation ? 
+    totalUtilization < systemMaxUtilization : 
+    totalUtilization < 100;
   
   // If resources are still loading, show loading spinner
   if (resourcesLoading) return <LoadingSpinner />;
@@ -121,9 +130,9 @@ const ResourceDetail = () => {
               <button 
                 onClick={handleAddAllocation}
                 className={`bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 ${
-                  totalUtilization >= 100 ? 'opacity-50 cursor-not-allowed' : ''
+                  !canAddAllocation ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
-                disabled={totalUtilization >= 100}
+                disabled={!canAddAllocation}
               >
                 Add Allocation
               </button>
@@ -137,12 +146,23 @@ const ResourceDetail = () => {
               <div className="w-full bg-gray-200 rounded-full h-2.5">
                 <div 
                   className={`h-2.5 rounded-full ${
-                    totalUtilization > 100 ? 'bg-red-600' : 'bg-blue-600'
+                    totalUtilization > systemMaxUtilization ? 'bg-red-600' : 
+                    totalUtilization > 100 ? 'bg-yellow-600' : 'bg-blue-600'
                   }`}
                   style={{width: `${Math.min(totalUtilization, 100)}%`}}
                 ></div>
               </div>
-              {totalUtilization > 100 && (
+              {totalUtilization > systemMaxUtilization && (
+                <p className="text-sm text-red-600 mt-1">
+                  Warning: Total utilization exceeds {systemMaxUtilization}% (system maximum)
+                </p>
+              )}
+              {totalUtilization > 100 && totalUtilization <= systemMaxUtilization && allowOverallocation && (
+                <p className="text-sm text-yellow-600 mt-1">
+                  Over-allocated: {totalUtilization}% (within {systemMaxUtilization}% limit)
+                </p>
+              )}
+              {totalUtilization > 100 && !allowOverallocation && (
                 <p className="text-sm text-red-600 mt-1">
                   Warning: Total utilization exceeds 100%
                 </p>
@@ -278,9 +298,6 @@ const ResourceDetail = () => {
         <AllocationForm 
           resourceId={resourceId}
           allocation={selectedAllocation}
-          maxUtilization={selectedAllocation ? 
-            100 - (totalUtilization - selectedAllocation.utilization) :
-            100 - totalUtilization}
           onClose={() => {
             setShowAllocationForm(false);
             setSelectedAllocation(null);

@@ -46,8 +46,12 @@ const ScenarioAllocationForm = ({
   const currentTotalUtilization = resource ? 
     calculateTotalUtilization(resource) - (existingAllocation ? (existingAllocation.utilization || 0) : 0) : 0;
   
-  // Set maximum available utilization, allowing overallocation up to the admin-defined threshold
-  const availableUtilization = Math.max(0, systemMaxUtilization - currentTotalUtilization);
+  // Set maximum available utilization based on settings
+  // If overallocation is allowed, use system max, otherwise limit to remaining capacity
+  const allowOverallocation = settings.allowOverallocation;
+  const availableUtilization = allowOverallocation ? 
+    systemMaxUtilization : // Allow up to max settings value
+    Math.max(0, 100 - currentTotalUtilization); // Limited to 100% minus current
   
   // Format date for input
   const formatDateForInput = (dateString) => {
@@ -148,8 +152,8 @@ const ScenarioAllocationForm = ({
     if (!formData.endDate) newErrors.endDate = 'End date is required';
     
     // Validate utilization against the system-defined threshold
-    if (formData.utilization < 1 || formData.utilization > 100) {
-      newErrors.utilization = 'Utilization must be between 1 and 100%';
+    if (formData.utilization < 1 || formData.utilization > (allowOverallocation ? systemMaxUtilization : 100)) {
+      newErrors.utilization = `Utilization must be between 1 and ${allowOverallocation ? systemMaxUtilization : 100}%`;
     }
     
     if (formData.startDate && formData.endDate && new Date(formData.startDate) > new Date(formData.endDate)) {
@@ -317,12 +321,17 @@ const ScenarioAllocationForm = ({
               type="number"
               name="utilization"
               min="1"
-              max="100"
+              max={allowOverallocation ? systemMaxUtilization : 100}
               value={formData.utilization}
               onChange={handleChange}
               className={`w-full p-2 border rounded ${errors.utilization ? 'border-red-500' : 'border-gray-300'}`}
             />
             {errors.utilization && <p className="mt-1 text-sm text-red-600">{errors.utilization}</p>}
+            {systemMaxUtilization > 100 && allowOverallocation && (
+              <p className="mt-1 text-xs text-yellow-600">
+                Note: System allows overallocation up to {systemMaxUtilization}%
+              </p>
+            )}
             {formData.resourceId && (
               <p className="mt-1 text-xs text-gray-500">
                 Resource status: {formatAllocationStatus(resources.find(r => r.id === parseInt(formData.resourceId)))}
