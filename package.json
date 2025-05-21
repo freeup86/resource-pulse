@@ -1,6 +1,6 @@
 {
   "name": "resource-pulse",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "private": true,
   "dependencies": {
     "@headlessui/react": "^2.2.2",

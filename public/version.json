@@ -1,9 +1,9 @@
 {
-  "version": "0.1.1",
-  "buildNumber": "70",
-  "commitHash": "e9b698f534107f681bce9b50c80e89471dd0167e",
-  "commitHashShort": "e9b698f",
-  "commitDate": "%Y->- (HEAD -> master) e9b698f534107f681bce9b50c80e89471dd0167e:%M:HEAD",
-  "commitMessage": "Add automatic versioning system with UI display",
-  "buildDate": "2025-05-21 12:10:53"
+  "version": "0.1.3",
+  "buildNumber": "72",
+  "commitHash": "f9524e31978b99d8c0d590cb667220b2f6866de8",
+  "commitHashShort": "f9524e3",
+  "commitDate": "2025-05-21 12:22:41",
+  "commitMessage": "Fix DateRangeFilter to support multiple interfaces and resolve utilization forecast date picker issue",
+  "buildDate": "2025-05-21 12:22:41"
 }

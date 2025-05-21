@@ -117,6 +117,59 @@ const resourceReducer = (state, action) => {
         }
         return resource;
       });
+      
+    // New bulk operations reducer cases
+    case 'BULK_UPDATE_RESOURCES':
+      return state.map(resource => {
+        // Find if this resource is in the updated list
+        const updatedResource = action.payload.find(r => r.id === resource.id);
+        if (updatedResource) {
+          return {
+            ...resource,
+            ...updatedResource,
+            // Preserve allocations if not explicitly updated
+            allocations: updatedResource.allocations || resource.allocations || [],
+            allocation: updatedResource.allocation || resource.allocation
+          };
+        }
+        return resource;
+      });
+    
+    case 'BULK_DELETE_RESOURCES':
+      return state.filter(resource => !action.payload.includes(resource.id));
+    
+    case 'BULK_ADD_SKILLS':
+      return state.map(resource => {
+        // Check if this resource is in the list to update
+        if (action.payload.resourceIds.includes(resource.id)) {
+          // Create a set of existing skills to avoid duplicates
+          const existingSkills = new Set(
+            resource.skills.map(skill => 
+              typeof skill === 'string' ? skill.toLowerCase() : skill.name.toLowerCase()
+            )
+          );
+          
+          // Add new skills, avoiding duplicates
+          const newSkills = [
+            ...resource.skills,
+            ...action.payload.skills.filter(skill => {
+              const skillName = typeof skill === 'string' ? skill.toLowerCase() : skill.name.toLowerCase();
+              // Only add if not already in the existing skills
+              if (!existingSkills.has(skillName)) {
+                existingSkills.add(skillName); // Update set to track this skill
+                return true;
+              }
+              return false;
+            })
+          ];
+          
+          return {
+            ...resource,
+            skills: newSkills
+          };
+        }
+        return resource;
+      });
     
     default:
       return state;
@@ -283,7 +336,62 @@ export const ResourceProvider = ({ children }) => {
         }
       },
       addAllocation,
-      updateAllocation
+      updateAllocation,
+      
+      // Bulk operations
+      bulkUpdateResources: async (resourcesData) => {
+        try {
+          // Since the backend might not support this yet, handle optimistically
+          // In a real application, you would call the API and update based on response
+          // const updatedResources = await resourceService.bulkUpdateResources(resourcesData);
+          dispatch({ type: 'BULK_UPDATE_RESOURCES', payload: resourcesData });
+          return resourcesData;
+        } catch (err) {
+          setError('Failed to bulk update resources');
+          throw err;
+        }
+      },
+      
+      bulkDeleteResources: async (resourceIds) => {
+        try {
+          // Since the backend might not support this yet, handle optimistically
+          // In a real application, you would call the API and update based on response
+          // await resourceService.bulkDeleteResources(resourceIds);
+          
+          // Verify if any selected resources have allocations
+          const hasAllocatedResources = resources.some(
+            resource => resourceIds.includes(resource.id) && resource.allocation
+          );
+          
+          if (hasAllocatedResources) {
+            throw new Error('One or more selected resources have active allocations and cannot be deleted.');
+          }
+          
+          dispatch({ type: 'BULK_DELETE_RESOURCES', payload: resourceIds });
+          return { success: true, count: resourceIds.length };
+        } catch (err) {
+          setError(err.message || 'Failed to bulk delete resources');
+          throw err;
+        }
+      },
+      
+      bulkAddSkills: async (resourceIds, skills) => {
+        try {
+          // Since the backend might not support this yet, handle optimistically
+          // In a real application, you would call the API and update based on response
+          // const result = await resourceService.bulkAddSkills(resourceIds, skills);
+          
+          dispatch({ 
+            type: 'BULK_ADD_SKILLS', 
+            payload: { resourceIds, skills } 
+          });
+          
+          return { success: true, resourceIds, skills };
+        } catch (err) {
+          setError('Failed to add skills to multiple resources');
+          throw err;
+        }
+      }
     }}>
       {children}
     </ResourceContext.Provider>

@@ -9,6 +9,10 @@ import UtilizationChart from './dashboard/UtilizationChart';
 import SkillsAnalysis from './dashboard/SkillsAnalysis';
 import MiniTimeline from './dashboard/MiniTimeline';
 import FinancialSummary from './dashboard/FinancialSummary';
+import ResourceAvailabilityHeatmap from './dashboard/ResourceAvailabilityHeatmap';
+import ProjectRiskSummary from './dashboard/ProjectRiskSummary';
+import BurndownChart from './dashboard/BurndownChart';
+import OverallocationAlerts from './dashboard/OverallocationAlerts';
 
 const Dashboard = () => {
   const { resources, loading: resourcesLoading, error: resourcesError } = useResources();
@@ -111,11 +115,24 @@ const Dashboard = () => {
         <FinancialSummary />
       </div>
       
+      {/* Resource Alert Section */}
+      <div className="mb-6">
+        <OverallocationAlerts />
+      </div>
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <UtilizationChart />
-        {/*<SkillsAnalysis />*/}
-        {/* Mini Timeline */}
+        <ProjectRiskSummary />
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <BurndownChart />
         <MiniTimeline />
+      </div>
+      
+      {/* Resource Availability Heatmap - Full width */}
+      <div className="mb-6">
+        <ResourceAvailabilityHeatmap />
       </div>
       
       {/* Quick Links */}
