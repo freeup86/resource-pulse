@@ -1,7 +1,20 @@
 // src/components/analytics/DateRangeFilter.jsx
 import React from 'react';
 
-const DateRangeFilter = ({ startDate, endDate, onChange, onFilterApply }) => {
+const DateRangeFilter = ({ 
+  startDate, 
+  endDate, 
+  onChange, 
+  onFilterApply,
+  onStartDateChange,
+  onEndDateChange,
+  dateRange,
+  onDateRangeChange
+}) => {
+  // Support both dateRange object and individual startDate/endDate props
+  const currentStartDate = dateRange?.startDate || startDate;
+  const currentEndDate = dateRange?.endDate || endDate;
+  
   // Format dates to YYYY-MM-DD for the input elements
   const formatDateForInput = (date) => {
     if (!date) return '';
@@ -10,20 +23,48 @@ const DateRangeFilter = ({ startDate, endDate, onChange, onFilterApply }) => {
   };
   
   const handleStartDateChange = (e) => {
-    if (onChange) {
-      onChange({
-        startDate: new Date(e.target.value),
-        endDate
+    const dateValue = e.target.value;
+    const newStartDate = new Date(dateValue);
+    
+    // Support both API patterns
+    if (onDateRangeChange) {
+      // New pattern: dateRange object with Date objects
+      onDateRangeChange({
+        startDate: newStartDate,
+        endDate: currentEndDate
       });
+    } else if (onChange) {
+      // Legacy pattern: onChange with object
+      onChange({
+        startDate: newStartDate,
+        endDate: currentEndDate
+      });
+    } else if (onStartDateChange) {
+      // Individual handlers pattern - pass string for AnalyticsDashboard compatibility
+      onStartDateChange(dateValue);
     }
   };
   
   const handleEndDateChange = (e) => {
-    if (onChange) {
-      onChange({
-        startDate,
-        endDate: new Date(e.target.value)
+    const dateValue = e.target.value;
+    const newEndDate = new Date(dateValue);
+    
+    // Support both API patterns
+    if (onDateRangeChange) {
+      // New pattern: dateRange object with Date objects
+      onDateRangeChange({
+        startDate: currentStartDate,
+        endDate: newEndDate
       });
+    } else if (onChange) {
+      // Legacy pattern: onChange with object
+      onChange({
+        startDate: currentStartDate,
+        endDate: newEndDate
+      });
+    } else if (onEndDateChange) {
+      // Individual handlers pattern - pass string for AnalyticsDashboard compatibility
+      onEndDateChange(dateValue);
     }
   };
   
@@ -36,7 +77,7 @@ const DateRangeFilter = ({ startDate, endDate, onChange, onFilterApply }) => {
           <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
           <input
             type="date"
-            value={formatDateForInput(startDate)}
+            value={formatDateForInput(currentStartDate)}
             onChange={handleStartDateChange}
             className="w-full p-2 border border-gray-300 rounded"
           />
@@ -46,7 +87,7 @@ const DateRangeFilter = ({ startDate, endDate, onChange, onFilterApply }) => {
           <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
           <input
             type="date"
-            value={formatDateForInput(endDate)}
+            value={formatDateForInput(currentEndDate)}
             onChange={handleEndDateChange}
             className="w-full p-2 border border-gray-300 rounded"
           />
