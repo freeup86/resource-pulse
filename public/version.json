@@ -1,9 +1,9 @@
 {
-  "version": "0.1.7",
-  "buildNumber": "76",
-  "commitHash": "04b5efbb23b19af6b48d3a16ebdadbdaa425dba2",
-  "commitHashShort": "04b5efb",
-  "commitDate": "2025-05-22 12:53:40",
-  "commitMessage": "Updte to skills dropdown",
-  "buildDate": "2025-05-22 12:53:52"
+  "version": "0.1.8",
+  "buildNumber": "77",
+  "commitHash": "578bd2cdf04f584abc55facbe98bc5af853b635a",
+  "commitHashShort": "578bd2c",
+  "commitDate": "2025-05-22 13:42:20",
+  "commitMessage": "update",
+  "buildDate": "2025-05-22 13:42:26"
 }
