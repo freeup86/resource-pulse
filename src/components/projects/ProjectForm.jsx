@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useProjects } from '../../contexts/ProjectContext';
 import { useRoles } from '../../contexts/RoleContext';
+import { useSkills } from '../../contexts/SkillsContext';
 
 const ProjectForm = ({ project = null, onClose }) => {
   const { addProject, updateProject } = useProjects();
   const { roles } = useRoles();
+  const { skills: availableSkills, categories, loading: skillsLoading } = useSkills();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -13,7 +15,6 @@ const ProjectForm = ({ project = null, onClose }) => {
     projectNumber: '',
     projectOwner: '',
     requiredSkills: [],
-    skillInput: '',
     requiredRoles: [], // Array of {roleId, count} objects
     roleInput: { roleId: '', count: 1 },
     startDate: '',
@@ -23,6 +24,7 @@ const ProjectForm = ({ project = null, onClose }) => {
     financialNotes: ''
   });
   const [errors, setErrors] = useState({});
+  const [selectedSkill, setSelectedSkill] = useState('');
 
   // Helper function to format dates for the date input
   const formatDateForInput = (dateString) => {
@@ -86,8 +88,14 @@ const ProjectForm = ({ project = null, onClose }) => {
         description: project.description || '',
         projectNumber: project.projectNumber || '',
         projectOwner: project.projectOwner || '',
-        requiredSkills: [...project.requiredSkills],
-        skillInput: '',
+        requiredSkills: [...(project.requiredSkills || []).map(skill => {
+          // If skill is a string, keep as string
+          if (typeof skill === 'string') {
+            return skill;
+          }
+          // If skill is an object, extract just the name
+          return skill.name;
+        })],
         requiredRoles: formattedRoles,
         roleInput: { roleId: '', count: 1 },
         startDate: formattedStartDate,
@@ -115,21 +123,49 @@ const ProjectForm = ({ project = null, onClose }) => {
     }
   };
 
+  const handleSkillChange = (e) => {
+    const skillId = e.target.value;
+    const skill = availableSkills.find(s => s.id.toString() === skillId);
+    setSelectedSkill(skill || '');
+  };
+
   const handleAddSkill = () => {
-    if (formData.skillInput.trim()) {
-      if (!formData.requiredSkills.includes(formData.skillInput.trim())) {
-        setFormData(prev => ({
-          ...prev,
-          requiredSkills: [...prev.requiredSkills, prev.skillInput.trim()],
-          skillInput: ''
-        }));
-      } else {
-        setErrors(prev => ({
-          ...prev,
-          skillInput: 'This skill already exists'
-        }));
-      }
+    // Check if skill is selected
+    if (!selectedSkill || !selectedSkill.id) {
+      setErrors(prev => ({
+        ...prev,
+        skills: 'Please select a skill'
+      }));
+      return;
     }
+    
+    // Check if skill already exists
+    const skillExists = formData.requiredSkills.some(skill => 
+      (typeof skill === 'string' ? skill : skill.name).toLowerCase() === selectedSkill.name.toLowerCase()
+    );
+    
+    if (skillExists) {
+      setErrors(prev => ({
+        ...prev,
+        skills: 'This skill already exists'
+      }));
+      return;
+    }
+    
+    // Add skill name to form data
+    setFormData(prev => ({
+      ...prev,
+      requiredSkills: [...prev.requiredSkills, selectedSkill.name]
+    }));
+    
+    // Reset selected skill
+    setSelectedSkill('');
+    
+    // Clear errors
+    setErrors(prev => ({
+      ...prev,
+      skills: ''
+    }));
   };
 
   const handleRemoveSkill = (skillToRemove) => {
@@ -400,25 +436,46 @@ const ProjectForm = ({ project = null, onClose }) => {
           
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Required Skills</label>
-            <div className="flex">
-              <input
-                type="text"
-                name="skillInput"
-                value={formData.skillInput}
-                onChange={handleChange}
-                className={`flex-grow p-2 border rounded-l ${errors.skillInput ? 'border-red-500' : 'border-gray-300'}`}
-                placeholder="Add a required skill"
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSkill())}
-              />
+            <div className="flex gap-2 mb-2">
+              <select
+                value={selectedSkill ? selectedSkill.id : ''}
+                onChange={handleSkillChange}
+                className={`flex-grow p-2 border rounded ${errors.skills ? 'border-red-500' : 'border-gray-300'}`}
+                disabled={skillsLoading}
+              >
+                <option value="">Select a skill</option>
+                {categories && categories.length > 0 ? (
+                  categories.map(category => (
+                    <optgroup key={category.name || category} label={category.name || category}>
+                      {availableSkills
+                        .filter(skill => skill.category === (category.name || category))
+                        .map(skill => (
+                          <option key={skill.id} value={skill.id}>
+                            {skill.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))
+                ) : null}
+                {availableSkills
+                  .filter(skill => !skill.category)
+                  .map(skill => (
+                    <option key={skill.id} value={skill.id}>
+                      {skill.name}
+                    </option>
+                  ))}
+              </select>
+              
               <button
                 type="button"
                 onClick={handleAddSkill}
-                className="bg-blue-600 text-white px-4 py-2 rounded-r hover:bg-blue-700"
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
               >
                 Add
               </button>
             </div>
-            {errors.skillInput && <p className="mt-1 text-sm text-red-600">{errors.skillInput}</p>}
+            {errors.skills && <p className="mt-1 text-sm text-red-600">{errors.skills}</p>}
+            {skillsLoading && <p className="mt-1 text-sm text-gray-500">Loading skills...</p>}
             
             <div className="flex flex-wrap gap-2 mt-2">
               {formData.requiredSkills.map((skill, idx) => (

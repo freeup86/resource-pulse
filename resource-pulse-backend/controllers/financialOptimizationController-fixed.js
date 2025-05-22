@@ -35,7 +35,6 @@ const generateOptimizedAllocations = async (req, res) => {
       options.endDate = req.query.endDate;
     }
 
-    console.log('Generating optimized allocations with options:', options);
 
     try {
       // Get database connection
@@ -62,18 +61,15 @@ const generateOptimizedAllocations = async (req, res) => {
         ORDER BY p.Name
       `;
       
-      console.log('Running projects query for optimization:', projectsQuery);
       const projectsResult = await pool.request()
         .input('startDate', options.startDate)
         .input('endDate', options.endDate)
         .query(projectsQuery);
       const projects = projectsResult.recordset;
       
-      console.log(`Found ${projects.length} projects for optimization`);
       
       // If no projects found, return empty recommendations instead of throwing error
       if (projects.length === 0) {
-        console.log('No projects found for optimization - returning empty recommendations');
         return res.json({
           recommendations: [],
           optimizationGoal: options.optimizationGoal,
@@ -116,7 +112,6 @@ const generateOptimizedAllocations = async (req, res) => {
       const allocationsResult = await pool.request().query(allocationsQuery);
       const allocations = allocationsResult.recordset || [];
 
-      console.log(`Found ${allocations.length} current allocations for optimization`);
 
       // Generate recommendations based on real projects and allocations
       const recommendations = [];
@@ -301,7 +296,6 @@ const generateOptimizedAllocations = async (req, res) => {
  */
 const getCostRevenueAnalysis = async (req, res) => {
   try {
-    console.log('Cost-Revenue Analysis API called');
     
     // Parse parameters
     const startDate = req.query.startDate;
@@ -313,7 +307,6 @@ const getCostRevenueAnalysis = async (req, res) => {
       return projectData.split(',');
     })();
     
-    console.log(`Parameters: startDate=${startDate}, endDate=${endDate}, projectIds=${projectIds.join(',') || 'all'}`);
     
     try {
       // Get database connection
@@ -341,14 +334,12 @@ const getCostRevenueAnalysis = async (req, res) => {
         ORDER BY p.Name
       `;
       
-      console.log('Running projects query:', projectsQuery);
       const projectsResult = await pool.request()
         .input('startDate', startDate)
         .input('endDate', endDate)
         .query(projectsQuery);
       const dbProjects = projectsResult.recordset;
       
-      console.log(`Found ${dbProjects.length} projects in database`);
       
       // Transform projects data to add financial calculations
       const projects = dbProjects.map(project => {
@@ -416,13 +407,6 @@ const getCostRevenueAnalysis = async (req, res) => {
       const totalProfit = projects.reduce((sum, project) => sum + project.profit, 0); // Sum individual project profits
       const profitMargin = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
       
-      console.log('Financial Summary Calculation Debug:');
-      console.log('- Number of projects:', projects.length);
-      console.log('- Individual project profits:', projects.map(p => ({ name: p.name, profit: p.profit })));
-      console.log('- Total Revenue:', totalRevenue);
-      console.log('- Total Cost:', totalCost);
-      console.log('- Total Profit (sum of individual):', totalProfit);
-      console.log('- Profit Margin:', profitMargin);
       
       // Generate monthly time series data for chart
       const monthlyData = [];
@@ -539,7 +523,6 @@ const applyOptimizations = async (req, res) => {
       });
     }
 
-    console.log('Applying optimizations:', req.body);
     
     // The real implementation would call a service method to apply the changes
     // but for now, we'll just return a success response

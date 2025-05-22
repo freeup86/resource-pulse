@@ -404,12 +404,6 @@ const getProfile = async (req, res) => {
     // User ID should come from the authenticated middleware
     const userId = req.user?.userId;
     
-    // Enhanced error logging
-    console.log('Profile fetch request from user:', {
-      userId: userId,
-      type: typeof userId,
-      headers: req.headers['user-agent']
-    });
     
     // FIXED: Ensure userId is a valid number before using with SQL Server
     let userIdNumber;

@@ -14,6 +14,7 @@ import EndingSoonPage from './components/allocations/EndingSoonPage';
 import MatchesPage from './components/matching/MatchesPage';
 import TimelinePage from './components/pages/TimelinePage';
 import RolesPage from './components/admin/RolesPage';
+import SkillsPage from './components/admin/SkillsPage';
 import ImportPage from './components/admin/ImportPage';
 import ExportPage from './components/admin/ExportPage';
 import SyncPage from './components/admin/SyncPage';
@@ -86,6 +87,7 @@ function App() {
                         <Route path="/timeline" element={<TimelinePage />} />
                         <Route path="/capacity" element={<CapacityPlanningPage />} />
                         <Route path="/admin/roles" element={<RolesPage />} />
+                        <Route path="/admin/skills" element={<SkillsPage />} />
                         <Route path="/admin/import" element={<ImportPage />} />
                         <Route path="/admin/export" element={<ExportPage />} />
                         <Route path="/admin/sync" element={<SyncPage />} />

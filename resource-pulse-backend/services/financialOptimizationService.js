@@ -121,7 +121,6 @@ const generateOptimizedAllocations = async (options = {}) => {
       console.error('Error in optimization process:', optimizationError);
       
       // If any part of the process fails, fall back to sample data
-      console.log('Falling back to sample data due to optimization error');
       
       // Get fallback data
       const financialData = getFinancialDataFallback(dateRange.startDate, dateRange.endDate);
@@ -180,8 +179,6 @@ const getFinancialData = async (dateInfo, departmentId) => {
       endDate = converted.endDate;
     }
     
-    // Log date range for debugging
-    console.log(`Getting financial data for date range: ${startDate} to ${endDate}`);
     
     try {
       // Get resource financial data
@@ -297,7 +294,6 @@ const getFinancialData = async (dateInfo, departmentId) => {
       };
     } catch (dbError) {
       console.error('Database error in getFinancialData:', dbError);
-      console.log('Using fallback sample data for financial information');
       
       // Return fallback sample data
       return getFinancialDataFallback(startDate, endDate);
@@ -322,7 +318,6 @@ const getFinancialData = async (dateInfo, departmentId) => {
  * @returns {Object} - Sample financial data
  */
 const getFinancialDataFallback = (startDate = '2023-01-01', endDate = '2023-12-31') => {
-  console.log(`Generating fallback financial data for ${startDate} to ${endDate}`);
   
   // Sample resources with financial data
   const resources = [
@@ -491,8 +486,6 @@ const getAllocations = async (dateInfo) => {
       endDate = converted.endDate;
     }
     
-    // Log date range for debugging
-    console.log(`Getting allocations for date range: ${startDate} to ${endDate}`);
     
     try {
       const query = `
@@ -509,7 +502,6 @@ const getAllocations = async (dateInfo) => {
       return results;
     } catch (dbError) {
       console.error('Database error in getAllocations:', dbError);
-      console.log('Using fallback sample data for allocations');
       
       // Return fallback sample allocation data
       return getAllocationsFallback(startDate, endDate);
@@ -534,7 +526,6 @@ const getAllocations = async (dateInfo) => {
  * @returns {Array} - Sample allocation data
  */
 const getAllocationsFallback = (startDate = '2023-01-01', endDate = '2023-12-31') => {
-  console.log(`Generating fallback allocation data for ${startDate} to ${endDate}`);
   
   // Sample allocation data to match the resource and project IDs in getFinancialDataFallback
   return [
@@ -730,7 +721,6 @@ const getConstraints = async (resourceConstraints, projectConstraints) => {
       return constraints;
     } catch (dbError) {
       console.error('Database error in getConstraints:', dbError);
-      console.log('Using fallback sample data for constraints');
       
       // Return fallback sample constraints data
       return getConstraintsFallback(resourceConstraints, projectConstraints);
@@ -755,7 +745,6 @@ const getConstraints = async (resourceConstraints, projectConstraints) => {
  * @returns {Object} - Sample constraints data
  */
 const getConstraintsFallback = (resourceConstraints = [], projectConstraints = []) => {
-  console.log(`Generating fallback constraints for resources: ${resourceConstraints} and projects: ${projectConstraints}`);
   
   // Default sample constraints
   const sampleConstraints = {
@@ -1537,10 +1526,8 @@ const getOptimizationScenarios = async (options = {}) => {
         startDate: options.startDate,
         endDate: options.endDate
       };
-      console.log(`Using custom date range for scenarios: ${options.startDate} to ${options.endDate}`);
     } else {
       dateRange = convertTimeRangeToDateRange(options.timeRange || '3months');
-      console.log(`Using time range for scenarios: ${options.timeRange || '3months'}`);
     }
     
     const scenarios = [];

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, Settings, Bell, Lightbulb, LogOut, User, GitBranch } from 'lucide-react';
 import NotificationCenter from '../notifications/NotificationCenter';
@@ -13,6 +13,14 @@ const Header = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [notificationsCount, setNotificationsCount] = useState(0);
   const { currentUser, logout } = useAuth();
+  
+  // Refs for dropdown containers
+  const adminDropdownRef = useRef(null);
+  const aiDropdownRef = useRef(null);
+  const notificationsDropdownRef = useRef(null);
+  const userDropdownRef = useRef(null);
+  const mobileMenuRef = useRef(null);
+  const mobileMenuButtonRef = useRef(null);
   
   useEffect(() => {
     // Fetch unread notifications count
@@ -32,6 +40,45 @@ const Header = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Handle clicks outside dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Close admin dropdown if clicked outside
+      if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) {
+        setIsAdminMenuOpen(false);
+      }
+      
+      // Close AI dropdown if clicked outside
+      if (aiDropdownRef.current && !aiDropdownRef.current.contains(event.target)) {
+        setIsAiMenuOpen(false);
+      }
+      
+      // Close notifications dropdown if clicked outside
+      if (notificationsDropdownRef.current && !notificationsDropdownRef.current.contains(event.target)) {
+        setIsNotificationsOpen(false);
+      }
+      
+      // Close user dropdown if clicked outside
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
+        setIsUserMenuOpen(false);
+      }
+      
+      // Close mobile menu if clicked outside (but not on the mobile menu button)
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target) && 
+          mobileMenuButtonRef.current && !mobileMenuButtonRef.current.contains(event.target)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    // Cleanup event listener
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const toggleNotifications = () => {
     setIsNotificationsOpen(!isNotificationsOpen);
   };
@@ -43,6 +90,7 @@ const Header = () => {
         
         {/* Mobile menu button */}
         <button 
+          ref={mobileMenuButtonRef}
           className="md:hidden"
           onClick={() => setIsMenuOpen(!isMenuOpen)}
         >
@@ -60,7 +108,7 @@ const Header = () => {
           </ul>
           
           {/* AI Features dropdown */}
-          <div className="relative ml-2">
+          <div className="relative ml-2" ref={aiDropdownRef}>
             <button 
               className="flex items-center hover:underline"
               onClick={() => setIsAiMenuOpen(!isAiMenuOpen)}
@@ -97,7 +145,7 @@ const Header = () => {
           </div>
           
           {/* Notifications Icon */}
-          <div className="relative ml-2">
+          <div className="relative ml-2" ref={notificationsDropdownRef}>
             <button 
               className="relative hover:text-gray-200"
               onClick={toggleNotifications}
@@ -119,7 +167,7 @@ const Header = () => {
           </div>
 
           {/* Admin dropdown */}
-          <div className="relative ml-2">
+          <div className="relative ml-2" ref={adminDropdownRef}>
             <button
               className="flex items-center hover:underline"
               onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
@@ -136,6 +184,13 @@ const Header = () => {
                   onClick={() => setIsAdminMenuOpen(false)}
                 >
                   Role Management
+                </Link>
+                <Link 
+                  to="/admin/skills" 
+                  className="block px-4 py-2 hover:bg-blue-100"
+                  onClick={() => setIsAdminMenuOpen(false)}
+                >
+                  Skills Management
                 </Link>
                 <Link 
                   to="/admin/import" 
@@ -170,7 +225,7 @@ const Header = () => {
           </div>
 
           {/* User dropdown */}
-          <div className="relative ml-2">
+          <div className="relative ml-2" ref={userDropdownRef}>
             <button
               className="flex items-center hover:underline"
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -211,7 +266,7 @@ const Header = () => {
         
         {/* Mobile Navigation */}
         {isMenuOpen && (
-          <div className="absolute top-16 right-0 left-0 bg-blue-600 z-10 md:hidden">
+          <div className="absolute top-16 right-0 left-0 bg-blue-600 z-10 md:hidden" ref={mobileMenuRef}>
             <nav className="container mx-auto p-4">
               <ul className="flex flex-col space-y-2">
                 <li>
@@ -306,6 +361,15 @@ const Header = () => {
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Role Management
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/admin/skills" 
+                    className="block p-2 hover:bg-blue-700 rounded ml-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Skills Management
                   </Link>
                 </li>
                 <li>

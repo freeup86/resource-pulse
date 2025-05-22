@@ -14,7 +14,6 @@ const ResourceForm = ({ resource = null, onClose }) => {
     email: '',
     phone: '',
     skills: [],
-    skillInput: '',
     hourlyRate: '',
     billableRate: '',
     currency: 'USD'
@@ -22,8 +21,6 @@ const ResourceForm = ({ resource = null, onClose }) => {
   const [errors, setErrors] = useState({});
   const [selectedSkill, setSelectedSkill] = useState('');
   const [selectedProficiency, setSelectedProficiency] = useState('');
-  const [skillSearchResults, setSkillSearchResults] = useState([]);
-  const [showSkillSearch, setShowSkillSearch] = useState(false);
 
   // If editing an existing resource, populate the form
   useEffect(() => {
@@ -40,7 +37,6 @@ const ResourceForm = ({ resource = null, onClose }) => {
           }
           return skill;
         })],
-        skillInput: '',
         hourlyRate: resource.hourlyRate || '',
         billableRate: resource.billableRate || '',
         currency: resource.currency || 'USD'
@@ -64,57 +60,28 @@ const ResourceForm = ({ resource = null, onClose }) => {
     }
   };
 
-  const handleSkillInputChange = (e) => {
-    const value = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      skillInput: value
-    }));
-    
-    // Filter available skills based on input
-    if (value.trim()) {
-      const filteredSkills = availableSkills.filter(skill => 
-        skill.name.toLowerCase().includes(value.toLowerCase())
-      );
-      setSkillSearchResults(filteredSkills.slice(0, 5));
-      setShowSkillSearch(true);
-    } else {
-      setSkillSearchResults([]);
-      setShowSkillSearch(false);
-    }
-  };
-
-  const handleSelectSkill = (skill) => {
-    setSelectedSkill(skill);
-    setFormData(prev => ({
-      ...prev,
-      skillInput: skill.name
-    }));
-    setShowSkillSearch(false);
+  const handleSkillChange = (e) => {
+    const skillId = e.target.value;
+    const skill = availableSkills.find(s => s.id.toString() === skillId);
+    setSelectedSkill(skill || '');
   };
 
   const handleAddSkill = () => {
-    // Check if skill input is not empty
-    if (!formData.skillInput.trim()) {
+    // Check if skill is selected
+    if (!selectedSkill || !selectedSkill.id) {
+      setErrors(prev => ({
+        ...prev,
+        skills: 'Please select a skill'
+      }));
       return;
     }
     
     // Create skill object
-    let skillToAdd;
-    if (selectedSkill && selectedSkill.id) {
-      // If a skill was selected from dropdown
-      skillToAdd = {
-        id: selectedSkill.id,
-        name: selectedSkill.name,
-        proficiencyLevel: selectedProficiency || null
-      };
-    } else {
-      // If a new skill name was typed
-      skillToAdd = {
-        name: formData.skillInput.trim(),
-        proficiencyLevel: selectedProficiency || null
-      };
-    }
+    const skillToAdd = {
+      id: selectedSkill.id,
+      name: selectedSkill.name,
+      proficiencyLevel: selectedProficiency || null
+    };
     
     // Check if skill already exists
     const skillExists = formData.skills.some(skill => 
@@ -124,7 +91,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
     if (skillExists) {
       setErrors(prev => ({
         ...prev,
-        skillInput: 'This skill already exists'
+        skills: 'This skill already exists'
       }));
       return;
     }
@@ -132,13 +99,18 @@ const ResourceForm = ({ resource = null, onClose }) => {
     // Add skill to form data
     setFormData(prev => ({
       ...prev,
-      skills: [...prev.skills, skillToAdd],
-      skillInput: ''
+      skills: [...prev.skills, skillToAdd]
     }));
     
     // Reset selected skill and proficiency
     setSelectedSkill('');
     setSelectedProficiency('');
+    
+    // Clear errors
+    setErrors(prev => ({
+      ...prev,
+      skills: ''
+    }));
   };
 
   const handleRemoveSkill = (skillToRemove) => {
@@ -332,36 +304,40 @@ const ResourceForm = ({ resource = null, onClose }) => {
           
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Skills</label>
-            <div className="flex">
-              <div className="relative flex-grow">
-                <input
-                  type="text"
-                  name="skillInput"
-                  value={formData.skillInput}
-                  onChange={handleSkillInputChange}
-                  className={`w-full p-2 border rounded-l ${errors.skillInput ? 'border-red-500' : 'border-gray-300'}`}
-                  placeholder="Add a skill"
-                  autoComplete="off"
-                />
-                {showSkillSearch && skillSearchResults.length > 0 && (
-                  <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-10">
-                    {skillSearchResults.map((skill) => (
-                      <div
-                        key={skill.id}
-                        className="p-2 hover:bg-gray-100 cursor-pointer"
-                        onClick={() => handleSelectSkill(skill)}
-                      >
-                        {skill.name} {skill.category && <span className="text-xs text-gray-500">({skill.category})</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+            <div className="flex gap-2 mb-2">
+              <select
+                value={selectedSkill ? selectedSkill.id : ''}
+                onChange={handleSkillChange}
+                className={`flex-grow p-2 border rounded ${errors.skills ? 'border-red-500' : 'border-gray-300'}`}
+                disabled={skillsLoading}
+              >
+                <option value="">Select a skill</option>
+                {categories && categories.length > 0 ? (
+                  categories.map(category => (
+                    <optgroup key={category.name || category} label={category.name || category}>
+                      {availableSkills
+                        .filter(skill => skill.category === (category.name || category))
+                        .map(skill => (
+                          <option key={skill.id} value={skill.id}>
+                            {skill.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))
+                ) : null}
+                {availableSkills
+                  .filter(skill => !skill.category)
+                  .map(skill => (
+                    <option key={skill.id} value={skill.id}>
+                      {skill.name}
+                    </option>
+                  ))}
+              </select>
               
               <select
                 value={selectedProficiency}
                 onChange={(e) => setSelectedProficiency(e.target.value)}
-                className="p-2 border border-gray-300 border-l-0"
+                className="p-2 border border-gray-300 rounded"
               >
                 <option value="">Proficiency</option>
                 {proficiencyLevels.map(level => (
@@ -374,12 +350,11 @@ const ResourceForm = ({ resource = null, onClose }) => {
               <button
                 type="button"
                 onClick={handleAddSkill}
-                className="bg-blue-600 text-white px-4 py-2 rounded-r hover:bg-blue-700"
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
               >
                 Add
               </button>
             </div>
-            {errors.skillInput && <p className="mt-1 text-sm text-red-600">{errors.skillInput}</p>}
             {errors.skills && <p className="mt-1 text-sm text-red-600">{errors.skills}</p>}
             {skillsLoading && <p className="mt-1 text-sm text-gray-500">Loading skills...</p>}
             

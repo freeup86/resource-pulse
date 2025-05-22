@@ -1,9 +1,9 @@
 {
-  "version": "0.1.5",
-  "buildNumber": "74",
-  "commitHash": "1b9f34e4ea006998401ef7f322dd47934b647b25",
-  "commitHashShort": "1b9f34e",
-  "commitDate": "2025-05-21 13:48:40",
-  "commitMessage": "Fix runtime errors in new components",
-  "buildDate": "2025-05-21 13:48:40"
+  "version": "0.1.6",
+  "buildNumber": "75",
+  "commitHash": "a5fac7ae67714bcb6bd9f90314ea8511b492fd29",
+  "commitHashShort": "a5fac7a",
+  "commitDate": "2025-05-21 14:15:18",
+  "commitMessage": "Fix resource overallocation validation to respect system settings",
+  "buildDate": "2025-05-21 14:15:18"
 }
