@@ -1,9 +1,9 @@
 {
-  "version": "0.1.6",
-  "buildNumber": "75",
-  "commitHash": "a5fac7ae67714bcb6bd9f90314ea8511b492fd29",
-  "commitHashShort": "a5fac7a",
-  "commitDate": "2025-05-21 14:15:18",
-  "commitMessage": "Fix resource overallocation validation to respect system settings",
-  "buildDate": "2025-05-21 14:15:18"
+  "version": "0.1.7",
+  "buildNumber": "76",
+  "commitHash": "04b5efbb23b19af6b48d3a16ebdadbdaa425dba2",
+  "commitHashShort": "04b5efb",
+  "commitDate": "2025-05-22 12:53:40",
+  "commitMessage": "Updte to skills dropdown",
+  "buildDate": "2025-05-22 12:53:52"
 }
