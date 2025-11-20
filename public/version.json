@@ -1,9 +1,9 @@
 {
-  "version": "0.1.14",
-  "buildNumber": "82",
-  "commitHash": "37c36caf156a289c79b1f3d1a80e44b53cd57396",
-  "commitHashShort": "37c36ca",
-  "commitDate": "2025-11-19 22:42:49",
-  "commitMessage": "Bump version to 0.1.13",
-  "buildDate": "2025-11-19 22:42:49"
+  "version": "0.1.15",
+  "buildNumber": "83",
+  "commitHash": "d1e3f3210a8038e0bcbba317577f4be8c27663dc",
+  "commitHashShort": "d1e3f32",
+  "commitDate": "2025-11-19 22:42:51",
+  "commitMessage": "Bump version to 0.1.14",
+  "buildDate": "2025-11-19 22:42:51"
 }
