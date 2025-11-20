@@ -1,9 +1,9 @@
 {
-  "version": "0.1.12",
-  "buildNumber": "80",
-  "commitHash": "0309e6002f30bb3faabf4296d5f73c8f0741e4cb",
-  "commitHashShort": "0309e60",
-  "commitDate": "2025-11-19 22:42:40",
-  "commitMessage": "Add resource requests and financial phasing to ProjectDetail",
-  "buildDate": "2025-11-19 22:42:40"
+  "version": "0.1.13",
+  "buildNumber": "81",
+  "commitHash": "c376188d7978cd8f42b89429debff0aab3de18fc",
+  "commitHashShort": "c376188",
+  "commitDate": "2025-11-19 22:42:45",
+  "commitMessage": "Bump version to 0.1.12",
+  "buildDate": "2025-11-19 22:42:45"
 }
