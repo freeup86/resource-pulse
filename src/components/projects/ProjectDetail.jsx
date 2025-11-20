@@ -638,6 +638,19 @@ const ProjectDetail = ({ project }) => {
                     }).filter(Boolean)
                 }}
               />
+
+              {/* Resource Requests Section */}
+              <RequestList projectId={project.id} isResourceManager={false} />
+            </div>
+          )}
+
+          {activeTab === 'wbs' && (
+            <ProjectWBS projectId={project.id} canEdit={canEdit} />
+          )}
+
+          {activeTab === 'financials' && (
+            <div className="space-y-6">
+              <FinancialPhasing projectId={project.id} canEdit={canEdit} />
               <ProjectExpenses projectId={project.id} currency={project.currency} />
               <FinancialSnapshots projectId={project.id} currency={project.currency} />
             </div>
