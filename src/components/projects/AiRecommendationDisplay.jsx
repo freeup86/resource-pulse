@@ -4,18 +4,18 @@ import { formatCurrency } from '../../utils/dateUtils';
 /**
  * Component to display AI-generated skill recommendations
  */
-const AiRecommendationDisplay = ({ 
-  recommendations, 
-  onSave, 
-  onCancel, 
-  onDelete, 
-  isLoading, 
+const AiRecommendationDisplay = ({
+  recommendations,
+  onSave,
+  onCancel,
+  onDelete,
+  isLoading,
   projectName,
-  showDelete = false 
+  showDelete = false
 }) => {
   const [savingItemId, setSavingItemId] = useState(null);
   const [expandedRecId, setExpandedRecId] = useState(null);
-  
+
   // Handle loading state
   if (isLoading) {
     return (
@@ -26,7 +26,7 @@ const AiRecommendationDisplay = ({
       </div>
     );
   }
-  
+
   // Handle empty recommendations
   if (!recommendations || recommendations.length === 0) {
     return (
@@ -37,7 +37,7 @@ const AiRecommendationDisplay = ({
           </svg>
           <p className="text-lg font-medium">No recommendations available</p>
           <p className="mt-1">Try adding more skills to the project or try again later.</p>
-          <button 
+          <button
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
             onClick={onCancel}
           >
@@ -66,10 +66,10 @@ const AiRecommendationDisplay = ({
       setExpandedRecId(index);
     }
   };
-  
+
   // Get recommendation total count
   const totalRecommendations = recommendations.length;
-  
+
   // Calculate average time and cost
   const avgTime = Math.round(recommendations.reduce((sum, rec) => sum + (rec.estimatedTimeHours || 0), 0) / totalRecommendations);
   const avgCost = parseFloat((recommendations.reduce((sum, rec) => sum + (rec.cost || 0), 0) / totalRecommendations).toFixed(2));
@@ -78,42 +78,48 @@ const AiRecommendationDisplay = ({
     <div className="p-6 bg-white rounded-lg shadow-md max-w-4xl w-full max-h-[80vh] overflow-y-auto">
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-800">AI-Generated Skill Recommendations</h2>
+          <h2 className="text-xl font-bold text-gray-800">
+            {showDelete ? 'Saved Skill Recommendations' : 'AI-Generated Skill Recommendations'}
+          </h2>
           {projectName && (
             <p className="text-sm text-gray-600">For project: {projectName}</p>
           )}
         </div>
-        <div className="flex space-x-2">
-          <button 
-            className="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-            onClick={onCancel}
-          >
-            Close
-          </button>
-        </div>
+        {!showDelete && (
+          <div className="flex space-x-2">
+            <button
+              className="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+              onClick={() => onCancel && onCancel()}
+            >
+              Close
+            </button>
+          </div>
+        )}
       </div>
-      
-      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex flex-col sm:flex-row justify-between mb-2">
-          <p className="font-medium text-blue-800">AI recommendation insights:</p>
-          <div className="flex items-center space-x-4 text-sm text-gray-700 mt-2 sm:mt-0">
-            <div>
-              <span className="font-medium">{totalRecommendations}</span> skills
-            </div>
-            <div>
-              <span className="font-medium">{avgTime}</span> avg. hours
-            </div>
-            <div>
-              <span className="font-medium">{formatCurrency(avgCost, 'USD')}</span> avg. cost
+
+      {!showDelete && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex flex-col sm:flex-row justify-between mb-2">
+            <p className="font-medium text-blue-800">AI recommendation insights:</p>
+            <div className="flex items-center space-x-4 text-sm text-gray-700 mt-2 sm:mt-0">
+              <div>
+                <span className="font-medium">{totalRecommendations}</span> skills
+              </div>
+              <div>
+                <span className="font-medium">{avgTime}</span> avg. hours
+              </div>
+              <div>
+                <span className="font-medium">{formatCurrency(avgCost, 'USD')}</span> avg. cost
+              </div>
             </div>
           </div>
+          <p className="text-sm text-gray-700">
+            These personalized recommendations were generated using AI based on the project's required skills and context.
+            Each recommendation includes learning resources, estimated time investment, and approximate costs.
+          </p>
         </div>
-        <p className="text-sm text-gray-700">
-          These personalized recommendations were generated using AI based on the project's required skills and context.
-          Each recommendation includes learning resources, estimated time investment, and approximate costs.
-        </p>
-      </div>
-      
+      )}
+
       <div className="space-y-6">
         {Object.keys(groupedRecommendations).map((category) => (
           <div key={`category-${category}`} className="mb-4">
@@ -124,10 +130,10 @@ const AiRecommendationDisplay = ({
               {groupedRecommendations[category].map((rec, index) => {
                 const recId = `${category}-${index}`;
                 const isExpanded = expandedRecId === recId;
-                
+
                 return (
-                  <div 
-                    key={recId} 
+                  <div
+                    key={recId}
                     className={`border border-gray-200 rounded-lg p-4 transition-all hover:shadow-md ${isExpanded ? 'bg-gray-50' : ''}`}
                   >
                     <div className="flex justify-between items-start">
@@ -146,19 +152,19 @@ const AiRecommendationDisplay = ({
                         </span>
                       </div>
                     </div>
-                    
+
                     <div className={`mt-3 ${isExpanded ? '' : 'line-clamp-3'}`}>
                       <p className="text-sm text-gray-700">
                         {rec.description}
                       </p>
                     </div>
-                    
+
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex items-center space-x-4">
                         {rec.resourceUrl && (
-                          <a 
-                            href={rec.resourceUrl} 
-                            target="_blank" 
+                          <a
+                            href={rec.resourceUrl}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm text-blue-600 hover:underline inline-flex items-center"
                           >
@@ -168,17 +174,17 @@ const AiRecommendationDisplay = ({
                             View Resource
                           </a>
                         )}
-                        <button 
+                        <button
                           onClick={() => toggleExpanded(recId)}
                           className="text-sm text-gray-500 hover:text-gray-700"
                         >
                           {isExpanded ? 'Show less' : 'Show more'}
                         </button>
                       </div>
-                      
+
                       <div className="flex space-x-2">
                         {showDelete && rec.id && (
-                          <button 
+                          <button
                             className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded"
                             onClick={() => {
                               if (window.confirm('Are you sure you want to delete this recommendation?')) {
@@ -190,28 +196,30 @@ const AiRecommendationDisplay = ({
                             Delete
                           </button>
                         )}
-                        
-                        <button 
-                          className={`px-3 py-1 ${savingItemId === recId ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'} text-white text-sm rounded`}
-                          onClick={() => {
-                            setSavingItemId(recId);
-                            onSave(rec).finally(() => setSavingItemId(null));
-                          }}
-                          disabled={savingItemId !== null}
-                        >
-                          {savingItemId === recId ? (
-                            <div className="flex items-center">
-                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              Saving...
-                            </div>
-                          ) : 'Save Recommendation'}
-                        </button>
+
+                        {!showDelete && (
+                          <button
+                            className={`px-3 py-1 ${savingItemId === recId ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'} text-white text-sm rounded`}
+                            onClick={() => {
+                              setSavingItemId(recId);
+                              onSave(rec).finally(() => setSavingItemId(null));
+                            }}
+                            disabled={savingItemId !== null}
+                          >
+                            {savingItemId === recId ? (
+                              <div className="flex items-center">
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Saving...
+                              </div>
+                            ) : 'Save Recommendation'}
+                          </button>
+                        )}
                       </div>
                     </div>
-                    
+
                     {isExpanded && rec.aiGenerated && (
                       <div className="mt-3 text-xs text-gray-500 flex items-center">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -20,4 +20,7 @@ router.get('/resource/:resourceId', allocationController.getResourceAllocations)
 // GET /api/allocations/expired - Get expired allocations
 router.get('/expired', allocationController.getExpiredAllocations);
 
+// GET /api/allocations/capacity/forecast - Get capacity forecast
+router.get('/capacity/forecast', allocationController.getCapacityForecast);
+
 module.exports = router;

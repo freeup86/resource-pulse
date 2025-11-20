@@ -18,42 +18,53 @@ const addSkillRecommendation = async (req, res) => {
       cost,
       aiGenerated
     } = req.body;
-    
+
     if (!projectId || !skillId) {
       return res.status(400).json({
         success: false,
         message: 'Project ID and Skill ID are required'
       });
     }
-    
+
     const pool = await poolPromise;
-    
+
     // Check if project exists
     const projectCheck = await pool.request()
       .input('projectId', sql.Int, projectId)
       .query('SELECT ProjectID FROM Projects WHERE ProjectID = @projectId');
-    
+
     if (projectCheck.recordset.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Project not found'
       });
     }
-    
+
     // Check if skill exists
     const skillCheck = await pool.request()
       .input('skillId', sql.Int, skillId)
       .query('SELECT SkillID, Name FROM Skills WHERE SkillID = @skillId');
-    
+
     if (skillCheck.recordset.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Skill not found'
       });
     }
-    
+
     const skillName = skillCheck.recordset[0].Name;
-    
+
+    console.log('Inserting recommendation with data:', {
+      projectId,
+      skillId,
+      title,
+      description,
+      resourceUrl,
+      estimatedTimeHours,
+      cost,
+      aiGenerated
+    });
+
     // Insert the recommendation
     const result = await pool.request()
       .input('projectId', sql.Int, projectId)
@@ -88,9 +99,10 @@ const addSkillRecommendation = async (req, res) => {
         
         SELECT SCOPE_IDENTITY() AS RecommendationID;
       `);
-    
+
     const recommendationId = result.recordset[0].RecommendationID;
-    
+    console.log('Recommendation inserted with ID:', recommendationId);
+
     res.status(201).json({
       success: true,
       message: 'Skill recommendation added successfully',
@@ -125,16 +137,16 @@ const addSkillRecommendation = async (req, res) => {
 const getProjectSkillRecommendations = async (req, res) => {
   try {
     const { projectId } = req.params;
-    
+
     if (!projectId) {
       return res.status(400).json({
         success: false,
         message: 'Project ID is required'
       });
     }
-    
+
     const pool = await poolPromise;
-    
+
     // Get all recommendations for the project
     const result = await pool.request()
       .input('projectId', sql.Int, projectId)
@@ -156,7 +168,7 @@ const getProjectSkillRecommendations = async (req, res) => {
         WHERE sr.ProjectID = @projectId
         ORDER BY sr.CreatedAt DESC
       `);
-    
+
     const recommendations = result.recordset.map(rec => ({
       id: rec.RecommendationID,
       projectId: rec.ProjectID,
@@ -170,7 +182,9 @@ const getProjectSkillRecommendations = async (req, res) => {
       aiGenerated: rec.AIGenerated,
       createdAt: rec.CreatedAt
     }));
-    
+
+    console.log(`Returning ${recommendations.length} recommendations for project ${projectId}:`, recommendations.map(r => ({ id: r.id, title: r.title })));
+
     res.json({
       success: true,
       recommendations
@@ -193,35 +207,35 @@ const getProjectSkillRecommendations = async (req, res) => {
 const deleteSkillRecommendation = async (req, res) => {
   try {
     const { recommendationId } = req.params;
-    
+
     if (!recommendationId) {
       return res.status(400).json({
         success: false,
         message: 'Recommendation ID is required'
       });
     }
-    
+
     const pool = await poolPromise;
-    
+
     // Check if recommendation exists
     const recommendationCheck = await pool.request()
       .input('recommendationId', sql.Int, recommendationId)
       .query('SELECT RecommendationID, ProjectID FROM SkillRecommendations WHERE RecommendationID = @recommendationId');
-    
+
     if (recommendationCheck.recordset.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Recommendation not found'
       });
     }
-    
+
     const projectId = recommendationCheck.recordset[0].ProjectID;
-    
+
     // Delete the recommendation
     await pool.request()
       .input('recommendationId', sql.Int, recommendationId)
       .query('DELETE FROM SkillRecommendations WHERE RecommendationID = @recommendationId');
-    
+
     res.json({
       success: true,
       message: 'Skill recommendation deleted successfully',

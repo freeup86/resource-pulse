@@ -4,7 +4,7 @@ import axios from 'axios';
 // This will be the URL of your backend service on Render
 const API_URL = process.env.REACT_APP_API_URL || 'https://resource-pulse-backend.onrender.com/api';
 
-console.log('Using API URL:', API_URL);
+// console.log('Using API URL:', API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
@@ -25,21 +25,21 @@ api.interceptors.request.use(config => {
   // Add timestamp parameter to avoid caching
   const timestamp = new Date().getTime();
   config.params = { ...config.params, _t: timestamp };
-  
+
   // Check if auth header is being added and validate token format
   if (config.headers.Authorization) {
     const authHeader = config.headers.Authorization;
     const tokenParts = authHeader.split(' ');
-    
+
     if (tokenParts.length !== 2 || tokenParts[0] !== 'Bearer' || !tokenParts[1] || tokenParts[1].length < 10) {
-      console.error('Invalid token format detected in request:', { 
+      console.error('Invalid token format detected in request:', {
         header: authHeader,
         url: config.url
       });
-      
+
       // Remove the invalid token to prevent parsing errors
       delete config.headers.Authorization;
-      
+
       // If we're making an authenticated request without a proper token,
       // we can force a token refresh or redirect to login here
       if (!config.url.includes('/auth/login') && !config.url.includes('/auth/refresh-token')) {
@@ -49,7 +49,7 @@ api.interceptors.request.use(config => {
       }
     }
   }
-  
+
   return config;
 }, error => {
   console.error('API Request Error:', error);
@@ -77,17 +77,17 @@ api.interceptors.response.use(
     } else {
       console.error('API Setup Error:', typeof error === 'object' ? error.message : error);
     }
-    
+
     // Handle token errors with specific error types
-    if (error.message === 'wt' || 
-        (typeof error.message === 'string' && error.message.length < 5)) {
+    if (error.message === 'wt' ||
+      (typeof error.message === 'string' && error.message.length < 5)) {
       console.error('API Token Parsing Error Detected:', error.message);
       // Create a more helpful error for easier handling
       const tokenError = new Error('Authentication token format error');
       tokenError.name = 'TokenFormatError';
       return Promise.reject(tokenError);
     }
-    
+
     return Promise.reject(error);
   }
 );

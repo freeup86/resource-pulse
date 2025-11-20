@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSkills } from '../../contexts/SkillsContext';
 
-const SkillRecommendationForm = ({ onClose, skillId = null }) => {
+const SkillRecommendationForm = ({ onClose, skillId = null, projectId = null, onSuccess = null }) => {
   const { skills, addRecommendation } = useSkills();
-  
+
   const [formData, setFormData] = useState({
+    projectId: projectId || '',
     skillId: skillId || '',
     title: '',
     description: '',
@@ -12,28 +13,29 @@ const SkillRecommendationForm = ({ onClose, skillId = null }) => {
     estimatedTimeHours: '',
     cost: ''
   });
-  
+
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  
-  // Pre-select skill if skillId is provided
+
+  // Pre-select skill and project if provided
   useEffect(() => {
-    if (skillId) {
+    if (skillId || projectId) {
       setFormData(prev => ({
         ...prev,
-        skillId
+        ...(skillId && { skillId }),
+        ...(projectId && { projectId })
       }));
     }
-  }, [skillId]);
-  
+  }, [skillId, projectId]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-    
+
     // Clear error when field is edited
     if (errors[name]) {
       setErrors(prev => ({
@@ -42,42 +44,62 @@ const SkillRecommendationForm = ({ onClose, skillId = null }) => {
       }));
     }
   };
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+    e.stopPropagation();
+
+    console.log('Form submitted with data:', formData);
+
     // Validate form
     const newErrors = {};
     if (!formData.skillId) newErrors.skillId = 'Skill is required';
     if (!formData.title) newErrors.title = 'Title is required';
-    
+
     // Validate numeric fields
     if (formData.estimatedTimeHours && isNaN(Number(formData.estimatedTimeHours))) {
       newErrors.estimatedTimeHours = 'Must be a number';
     }
-    
+
     if (formData.cost && isNaN(Number(formData.cost))) {
       newErrors.cost = 'Must be a number';
     }
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      console.log('Validation errors:', newErrors);
       return;
     }
-    
+
     // Prepare data for submission
     const submitData = {
       ...formData,
+      skillId: parseInt(formData.skillId), // Convert to integer
       estimatedTimeHours: formData.estimatedTimeHours ? Number(formData.estimatedTimeHours) : null,
       cost: formData.cost ? Number(formData.cost) : null
     };
-    
+
+    console.log('Submitting recommendation:', submitData);
+
     // Submit recommendation
     try {
       setLoading(true);
-      await addRecommendation(submitData);
+      const result = await addRecommendation(submitData);
+      console.log('Recommendation added successfully:', result);
       setSuccess(true);
-      
+
+      // Call onSuccess callback immediately to refresh the list
+      console.log('onSuccess callback exists?', !!onSuccess);
+      if (onSuccess) {
+        console.log('Calling onSuccess callback to refresh recommendations...');
+        // Add a small delay to ensure the database transaction has completed
+        setTimeout(() => {
+          onSuccess();
+        }, 100);
+      } else {
+        console.warn('No onSuccess callback provided!');
+      }
+
       // Reset form after short delay to show success message
       setTimeout(() => {
         if (skillId) {
@@ -86,6 +108,7 @@ const SkillRecommendationForm = ({ onClose, skillId = null }) => {
         } else {
           // If standalone form, reset the form values
           setFormData({
+            projectId: projectId || '',
             skillId: '',
             title: '',
             description: '',
@@ -97,16 +120,17 @@ const SkillRecommendationForm = ({ onClose, skillId = null }) => {
         }
       }, 1500);
     } catch (error) {
+      console.error('Error adding recommendation:', error);
       setErrors({ submit: error.message || 'Failed to add recommendation' });
     } finally {
       setLoading(false);
     }
   };
-  
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <h2 className="text-xl font-semibold mb-4">Add Skill Development Recommendation</h2>
-      
+
       {success ? (
         <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
           Recommendation added successfully!
@@ -131,7 +155,7 @@ const SkillRecommendationForm = ({ onClose, skillId = null }) => {
             </select>
             {errors.skillId && <p className="mt-1 text-sm text-red-600">{errors.skillId}</p>}
           </div>
-          
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
             <input
@@ -144,7 +168,7 @@ const SkillRecommendationForm = ({ onClose, skillId = null }) => {
             />
             {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title}</p>}
           </div>
-          
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
@@ -156,7 +180,7 @@ const SkillRecommendationForm = ({ onClose, skillId = null }) => {
               placeholder="Describe the learning resource and its benefits"
             ></textarea>
           </div>
-          
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Resource URL</label>
             <input
@@ -168,7 +192,7 @@ const SkillRecommendationForm = ({ onClose, skillId = null }) => {
               placeholder="e.g., https://www.udemy.com/course/..."
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Time (hours)</label>
@@ -177,12 +201,12 @@ const SkillRecommendationForm = ({ onClose, skillId = null }) => {
                 name="estimatedTimeHours"
                 value={formData.estimatedTimeHours}
                 onChange={handleChange}
-                className={`w-full p-2 border rounded ${errors.estimatedTimeHours ? 'border-red-500' : 'border-gray-300'}`}
+                className={`w - full p - 2 border rounded ${errors.estimatedTimeHours ? 'border-red-500' : 'border-gray-300'} `}
                 placeholder="e.g., 20"
               />
               {errors.estimatedTimeHours && <p className="mt-1 text-sm text-red-600">{errors.estimatedTimeHours}</p>}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Cost ($)</label>
               <input
@@ -190,19 +214,19 @@ const SkillRecommendationForm = ({ onClose, skillId = null }) => {
                 name="cost"
                 value={formData.cost}
                 onChange={handleChange}
-                className={`w-full p-2 border rounded ${errors.cost ? 'border-red-500' : 'border-gray-300'}`}
+                className={`w - full p - 2 border rounded ${errors.cost ? 'border-red-500' : 'border-gray-300'} `}
                 placeholder="e.g., 19.99"
               />
               {errors.cost && <p className="mt-1 text-sm text-red-600">{errors.cost}</p>}
             </div>
           </div>
-          
+
           {errors.submit && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
               {errors.submit}
             </div>
           )}
-          
+
           <div className="flex justify-end space-x-3">
             <button
               type="button"

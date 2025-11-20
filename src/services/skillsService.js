@@ -124,7 +124,8 @@ export const createSkillCertification = async (certificationData) => {
 // Create skill development recommendation
 export const createSkillRecommendation = async (recommendationData) => {
   try {
-    const response = await api.post('/skills/recommendations', recommendationData);
+    const { projectId, ...data } = recommendationData;
+    const response = await api.post(`/skill-recommendations/projects/${projectId}`, data);
     return response.data;
   } catch (error) {
     console.error('Error creating skill recommendation:', error);

@@ -7,7 +7,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
   const { addResource, updateResource } = useResources();
   const { roles, loading: rolesLoading } = useRoles();
   const { skills: availableSkills, proficiencyLevels, categories, loading: skillsLoading } = useSkills();
-  
+
   const [formData, setFormData] = useState({
     name: '',
     roleId: '',
@@ -16,7 +16,8 @@ const ResourceForm = ({ resource = null, onClose }) => {
     skills: [],
     hourlyRate: '',
     billableRate: '',
-    currency: 'USD'
+    currency: 'USD',
+    systemRole: 'User'
   });
   const [errors, setErrors] = useState({});
   const [selectedSkill, setSelectedSkill] = useState('');
@@ -39,7 +40,8 @@ const ResourceForm = ({ resource = null, onClose }) => {
         })],
         hourlyRate: resource.hourlyRate || '',
         billableRate: resource.billableRate || '',
-        currency: resource.currency || 'USD'
+        currency: resource.currency || 'USD',
+        systemRole: resource.systemRole || 'User'
       });
     }
   }, [resource]);
@@ -50,7 +52,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
       ...prev,
       [name]: value
     }));
-    
+
     // Clear error when field is edited
     if (errors[name]) {
       setErrors(prev => ({
@@ -75,19 +77,19 @@ const ResourceForm = ({ resource = null, onClose }) => {
       }));
       return;
     }
-    
+
     // Create skill object
     const skillToAdd = {
       id: selectedSkill.id,
       name: selectedSkill.name,
       proficiencyLevel: selectedProficiency || null
     };
-    
+
     // Check if skill already exists
-    const skillExists = formData.skills.some(skill => 
+    const skillExists = formData.skills.some(skill =>
       skill.name.toLowerCase() === skillToAdd.name.toLowerCase()
     );
-    
+
     if (skillExists) {
       setErrors(prev => ({
         ...prev,
@@ -95,17 +97,17 @@ const ResourceForm = ({ resource = null, onClose }) => {
       }));
       return;
     }
-    
+
     // Add skill to form data
     setFormData(prev => ({
       ...prev,
       skills: [...prev.skills, skillToAdd]
     }));
-    
+
     // Reset selected skill and proficiency
     setSelectedSkill('');
     setSelectedProficiency('');
-    
+
     // Clear errors
     setErrors(prev => ({
       ...prev,
@@ -116,7 +118,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
   const handleRemoveSkill = (skillToRemove) => {
     setFormData(prev => ({
       ...prev,
-      skills: prev.skills.filter(skill => 
+      skills: prev.skills.filter(skill =>
         skill.name !== skillToRemove.name
       )
     }));
@@ -124,18 +126,18 @@ const ResourceForm = ({ resource = null, onClose }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     // Validate form
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = 'Name is required';
     if (!formData.roleId) newErrors.roleId = 'Role is required';
     if (formData.skills.length === 0) newErrors.skills = 'At least one skill is required';
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
-    
+
     // Create or update resource
     const resourceData = {
       name: formData.name,
@@ -151,15 +153,16 @@ const ResourceForm = ({ resource = null, onClose }) => {
       }),
       hourlyRate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : null,
       billableRate: formData.billableRate ? parseFloat(formData.billableRate) : null,
-      currency: formData.currency || 'USD'
+      currency: formData.currency || 'USD',
+      systemRole: formData.systemRole
     };
-    
+
     if (resource) {
       updateResource({ ...resourceData, id: resource.id });
     } else {
       addResource(resourceData);
     }
-    
+
     onClose();
   };
 
@@ -169,7 +172,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
         <div className="p-4 bg-blue-600 text-white rounded-t-lg">
           <h2 className="text-lg font-semibold">{resource ? 'Edit Resource' : 'Add New Resource'}</h2>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="p-6">
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -183,7 +186,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
             />
             {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
           </div>
-          
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
             <select
@@ -202,7 +205,23 @@ const ResourceForm = ({ resource = null, onClose }) => {
             {errors.roleId && <p className="mt-1 text-sm text-red-600">{errors.roleId}</p>}
             {rolesLoading && <p className="mt-1 text-sm text-gray-500">Loading roles...</p>}
           </div>
-          
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">System Role (RBAC)</label>
+            <select
+              name="systemRole"
+              value={formData.systemRole}
+              onChange={handleChange}
+              className="w-full p-2 border border-gray-300 rounded"
+            >
+              <option value="User">User (Standard Access)</option>
+              <option value="ProjectManager">Project Manager (Manage Projects)</option>
+              <option value="ResourceManager">Resource Manager (Manage Resources)</option>
+              <option value="Admin">Admin (Full Access)</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">Determines application access level.</p>
+          </div>
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
@@ -214,7 +233,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
               placeholder="Enter email address"
             />
           </div>
-          
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
             <input
@@ -226,11 +245,11 @@ const ResourceForm = ({ resource = null, onClose }) => {
               placeholder="Enter phone number"
             />
           </div>
-          
+
           {/* Financial Information Section */}
           <div className="mb-6 border-t pt-4 mt-4">
             <h3 className="text-md font-medium text-gray-800 mb-2">Financial Information</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Cost Rate</label>
@@ -251,7 +270,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
                 </div>
                 <p className="mt-1 text-xs text-gray-500">Internal cost rate per hour</p>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Billable Rate</label>
                 <div className="relative rounded-md shadow-sm">
@@ -271,7 +290,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
                 </div>
                 <p className="mt-1 text-xs text-gray-500">Rate charged to clients</p>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
                 <select
@@ -288,7 +307,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
                   <option value="JPY">JPY (¥)</option>
                 </select>
               </div>
-              
+
               {formData.hourlyRate && formData.billableRate && (
                 <div className="flex items-center">
                   <div className="p-2 bg-gray-50 rounded-lg w-full">
@@ -301,7 +320,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
               )}
             </div>
           </div>
-          
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Skills</label>
             <div className="flex gap-2 mb-2">
@@ -333,7 +352,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
                     </option>
                   ))}
               </select>
-              
+
               <select
                 value={selectedProficiency}
                 onChange={(e) => setSelectedProficiency(e.target.value)}
@@ -346,7 +365,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
                   </option>
                 ))}
               </select>
-              
+
               <button
                 type="button"
                 onClick={handleAddSkill}
@@ -357,17 +376,17 @@ const ResourceForm = ({ resource = null, onClose }) => {
             </div>
             {errors.skills && <p className="mt-1 text-sm text-red-600">{errors.skills}</p>}
             {skillsLoading && <p className="mt-1 text-sm text-gray-500">Loading skills...</p>}
-            
+
             <div className="flex flex-wrap gap-2 mt-2">
               {formData.skills.map((skill, idx) => (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   className={`flex items-center px-2 py-1 rounded-full text-sm
-                    ${skill.proficiencyLevel === 'Beginner' ? 'bg-blue-100 text-blue-800' : 
+                    ${skill.proficiencyLevel === 'Beginner' ? 'bg-blue-100 text-blue-800' :
                       skill.proficiencyLevel === 'Intermediate' ? 'bg-green-100 text-green-800' :
-                      skill.proficiencyLevel === 'Advanced' ? 'bg-purple-100 text-purple-800' :
-                      skill.proficiencyLevel === 'Expert' ? 'bg-red-100 text-red-800' :
-                      'bg-blue-100 text-blue-800'}`}
+                        skill.proficiencyLevel === 'Advanced' ? 'bg-purple-100 text-purple-800' :
+                          skill.proficiencyLevel === 'Expert' ? 'bg-red-100 text-red-800' :
+                            'bg-blue-100 text-blue-800'}`}
                 >
                   {skill.name}
                   {skill.proficiencyLevel && (
@@ -384,7 +403,7 @@ const ResourceForm = ({ resource = null, onClose }) => {
               ))}
             </div>
           </div>
-          
+
           <div className="flex justify-end space-x-3 mt-6">
             <button
               type="button"

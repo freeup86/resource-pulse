@@ -25,19 +25,19 @@ const ResourceDetail = () => {
   const [showAllocationForm, setShowAllocationForm] = useState(false);
   const [showCertificationForm, setShowCertificationForm] = useState(false);
   const [selectedAllocation, setSelectedAllocation] = useState(null);
-  
+
   const resourceId = parseInt(id);
-  
+
   // Use useMemo to memoize the resource finding logic
   const resource = useMemo(() => {
     return resources.find(r => r.id === resourceId);
   }, [resources, resourceId]);
-  
+
   const handleAddAllocation = () => {
     setSelectedAllocation(null);
     setShowAllocationForm(true);
   };
-  
+
   const handleEditAllocation = (allocation) => {
     setSelectedAllocation(allocation);
     setShowAllocationForm(true);
@@ -46,33 +46,33 @@ const ResourceDetail = () => {
   const handleAddCertification = () => {
     setShowCertificationForm(true);
   };
-  
+
   const handleDelete = () => {
     if (window.confirm('Are you sure you want to delete this resource?')) {
       deleteResource(resourceId);
       navigate('/resources');
     }
   };
-  
+
   // Compute total utilization using the utility function
   const totalUtilization = useMemo(() => {
     if (!resource) return 0;
     return calculateTotalUtilization(resource);
   }, [resource]);
-  
+
   // Check if allocation is allowed based on settings
   const systemMaxUtilization = settings.maxUtilizationPercentage || 100;
   const allowOverallocation = settings.allowOverallocation;
-  const canAddAllocation = allowOverallocation ? 
-    totalUtilization < systemMaxUtilization : 
+  const canAddAllocation = allowOverallocation ?
+    totalUtilization < systemMaxUtilization :
     totalUtilization < 100;
-  
+
   // If resources are still loading, show loading spinner
   if (resourcesLoading) return <LoadingSpinner />;
-  
+
   // If there's an error fetching resources, show error message
   if (resourcesError) return <ErrorMessage message={resourcesError} />;
-  
+
   // If resource is not found, show not found message
   if (!resource) {
     return (
@@ -84,25 +84,34 @@ const ResourceDetail = () => {
       </div>
     );
   }
-  
+
   // Get all allocations
   const allocations = resource.allocations || [];
-  
+
   return (
     <div>
       <div className="mb-4">
         <Link to="/resources" className="text-blue-600 hover:underline">← Back to Resources</Link>
       </div>
-      
+
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="p-6">
           <div className="flex justify-between items-start">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">{resource.name}</h2>
               <p className="text-gray-600">{resource.role}</p>
+              <div className="mt-1">
+                <span className={`px-2 py-0.5 text-xs rounded-full ${resource.systemRole === 'Admin' ? 'bg-purple-100 text-purple-800' :
+                    resource.systemRole === 'ProjectManager' ? 'bg-blue-100 text-blue-800' :
+                      resource.systemRole === 'ResourceManager' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-800'
+                  }`}>
+                  {resource.systemRole || 'User'}
+                </span>
+              </div>
             </div>
           </div>
-          
+
           <div className="mt-6">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium text-gray-900">Skills</h3>
@@ -123,33 +132,31 @@ const ResourceDetail = () => {
               })}
             </div>
           </div>
-          
+
           <div className="mt-6">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium text-gray-900">Allocations</h3>
-              <button 
+              <button
                 onClick={handleAddAllocation}
-                className={`bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 ${
-                  !canAddAllocation ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                className={`bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 ${!canAddAllocation ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 disabled={!canAddAllocation}
               >
                 Add Allocation
               </button>
             </div>
-            
+
             <div className="mt-2">
               <div className="flex justify-between items-center mb-1">
                 <span className="text-sm font-medium">Total Utilization</span>
                 <span className="text-sm font-medium">{totalUtilization}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div 
-                  className={`h-2.5 rounded-full ${
-                    totalUtilization > systemMaxUtilization ? 'bg-red-600' : 
-                    totalUtilization > 100 ? 'bg-yellow-600' : 'bg-blue-600'
-                  }`}
-                  style={{width: `${Math.min(totalUtilization, 100)}%`}}
+                <div
+                  className={`h-2.5 rounded-full ${totalUtilization > systemMaxUtilization ? 'bg-red-600' :
+                      totalUtilization > 100 ? 'bg-yellow-600' : 'bg-blue-600'
+                    }`}
+                  style={{ width: `${Math.min(totalUtilization, 100)}%` }}
                 ></div>
               </div>
               {totalUtilization > systemMaxUtilization && (
@@ -168,13 +175,13 @@ const ResourceDetail = () => {
                 </p>
               )}
             </div>
-            
+
             {allocations.length > 0 ? (
               <div className="mt-4 space-y-4">
                 {allocations.map((allocation, index) => {
                   // Find project by ID
                   const project = projects.find(p => p.id === allocation.projectId);
-                  
+
                   return (
                     <div key={`allocation-${allocation.id || index}`} className="bg-gray-50 p-4 rounded-lg">
                       <div className="flex justify-between items-start">
@@ -192,14 +199,14 @@ const ResourceDetail = () => {
                             {formatDate(allocation.startDate)} - {formatDate(allocation.endDate)}
                           </p>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleEditAllocation(allocation)}
                           className="text-blue-600 hover:underline text-sm"
                         >
                           Edit
                         </button>
                       </div>
-                      
+
                       <div className="mt-2">
                         <div className="flex justify-between text-sm mb-1">
                           <span>Utilization</span>
@@ -207,13 +214,12 @@ const ResourceDetail = () => {
                         </div>
                         <UtilizationBar percentage={allocation.utilization || 0} />
                       </div>
-                      
+
                       <div className="mt-2 text-sm">
-                        <span className={`${
-                          calculateDaysUntilEnd(allocation.endDate) <= 7 ? 'text-red-600' :
-                          calculateDaysUntilEnd(allocation.endDate) <= 14 ? 'text-yellow-600' :
-                          'text-gray-500'
-                        }`}>
+                        <span className={`${calculateDaysUntilEnd(allocation.endDate) <= 7 ? 'text-red-600' :
+                            calculateDaysUntilEnd(allocation.endDate) <= 14 ? 'text-yellow-600' :
+                              'text-gray-500'
+                          }`}>
                           {calculateDaysUntilEnd(allocation.endDate)} days remaining
                         </span>
                       </div>
@@ -224,7 +230,7 @@ const ResourceDetail = () => {
             ) : (
               <div className="bg-gray-50 p-4 rounded-lg mt-2 text-center">
                 <p className="text-gray-500">This resource is currently unallocated</p>
-                <button 
+                <button
                   onClick={handleAddAllocation}
                   className="mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
                 >
@@ -233,7 +239,7 @@ const ResourceDetail = () => {
               </div>
             )}
           </div>
-          
+
           {/* Certifications Section */}
           <div className="mt-6">
             <h3 className="text-lg font-medium text-gray-900">Skill Certifications</h3>
@@ -264,7 +270,7 @@ const ResourceDetail = () => {
               ) : (
                 <div className="bg-gray-50 p-4 rounded-lg text-center">
                   <p className="text-gray-500">No certifications added yet</p>
-                  <button 
+                  <button
                     onClick={handleAddCertification}
                     className="mt-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
                   >
@@ -274,11 +280,11 @@ const ResourceDetail = () => {
               )}
             </div>
           </div>
-          
+
           {/* Financial Information Section */}
           <div className="mt-8 p-4 border rounded-lg">
             {resource.financials ? (
-              <ResourceFinancials 
+              <ResourceFinancials
                 resource={resource}
                 allocations={allocations}
                 financialSummary={resource.financialSummary}
@@ -293,9 +299,9 @@ const ResourceDetail = () => {
           </div>
         </div>
       </div>
-      
+
       {showAllocationForm && (
-        <AllocationForm 
+        <AllocationForm
           resourceId={resourceId}
           allocation={selectedAllocation}
           onClose={() => {
@@ -307,7 +313,7 @@ const ResourceDetail = () => {
 
       {showCertificationForm && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <CertificationForm 
+          <CertificationForm
             resourceId={resourceId}
             onClose={() => setShowCertificationForm(false)}
           />

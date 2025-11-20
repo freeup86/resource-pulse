@@ -10,6 +10,10 @@ require('./patch-path-to-regexp');
 
 // Import routes
 const resourceRoutes = require('./routes/resourceRoutes');
+const milestoneRoutes = require('./routes/milestoneRoutes');
+const financialRoutes = require('./routes/financialRoutes');
+const raidRoutes = require('./routes/raidRoutes');
+const currencyRoutes = require('./routes/currencyRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const allocationRoutes = require('./routes/allocationRoutes');
 const roleRoutes = require('./routes/roleRoutes');
@@ -80,7 +84,7 @@ function sanitizeRoutePath(path) {
  * @returns {Function} - Patched route method
  */
 function patchRouteMethod(original) {
-  return function(path, ...handlers) {
+  return function (path, ...handlers) {
     return original.call(this, sanitizeRoutePath(path), ...handlers);
   };
 }
@@ -95,9 +99,9 @@ app.all = patchRouteMethod(app.all);
 
 // Patch express.Router 
 const originalRouter = express.Router;
-express.Router = function() {
+express.Router = function () {
   const router = originalRouter.apply(this, arguments);
-  
+
   // Patch router methods
   router.get = patchRouteMethod(router.get);
   router.post = patchRouteMethod(router.post);
@@ -105,7 +109,7 @@ express.Router = function() {
   router.delete = patchRouteMethod(router.delete);
   router.patch = patchRouteMethod(router.patch);
   router.all = patchRouteMethod(router.all);
-  
+
   return router;
 };
 
@@ -117,13 +121,13 @@ const corsOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
-    'Origin', 
-    'X-Requested-With', 
-    'Content-Type', 
-    'Accept', 
-    'Authorization', 
-    'Cache-Control', 
-    'Pragma', 
+    'Origin',
+    'X-Requested-With',
+    'Content-Type',
+    'Accept',
+    'Authorization',
+    'Cache-Control',
+    'Pragma',
     'Expires',
     'Access-Control-Allow-Origin',
     'Access-Control-Allow-Methods',
@@ -142,7 +146,7 @@ app.options('*', cors(corsOptions));
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
-  res.header('Access-Control-Allow-Headers', 
+  res.header('Access-Control-Allow-Headers',
     'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, Expires');
   res.header('Access-Control-Max-Age', '86400'); // 24 hours
   next();
@@ -154,6 +158,10 @@ app.use(helmet({
 }));
 app.use(morgan('dev')); // Logging
 app.use(express.json()); // Parse JSON bodies
+
+// Audit Logging Middleware
+const auditLog = require('./middleware/auditMiddleware');
+app.use(auditLog);
 
 // Base route
 app.get('/', (req, res) => {
@@ -186,6 +194,25 @@ app.use('/api/skills-gap', skillsGapRoutes);  // Skills gap analysis routes
 app.use('/api/documents', documentProcessingRoutes);  // Document processing routes
 app.use('/api/satisfaction', clientSatisfactionRoutes);  // Client satisfaction prediction routes
 app.use('/api/version', versionRoutes);  // Version information routes
+app.use('/api/requests', require('./routes/requestRoutes')); // Resource Request routes
+
+// Nested routes for milestones
+app.use('/api/projects/:projectId/milestones', milestoneRoutes);
+
+// Nested routes for financials
+app.use('/api/projects/:projectId/financials', financialRoutes);
+
+// Nested routes for RAID log
+app.use('/api/projects/:projectId/raid', raidRoutes);
+
+// Currency routes
+app.use('/api/currency', currencyRoutes);
+
+// WBS routes
+app.use('/api/projects/:projectId/wbs', require('./routes/wbsRoutes'));
+
+// Audit Log routes
+app.use('/api/audit', require('./routes/auditRoutes'));
 
 // Initialize system settings before starting server
 try {
@@ -258,7 +285,7 @@ if (process.env.NODE_ENV === 'production') {
   } catch (err) {
     console.error('Error initializing sync jobs:', err.message);
   }
-  
+
   try {
     notificationScheduler.initializeScheduledJobs();
   } catch (err) {

@@ -29,7 +29,7 @@ exports.getAllResources = async (req, res) => {
     }
 
     const pool = await poolPromise;
-    
+
     // Query resources with financial info
     const result = await pool.request()
       .query(`
@@ -47,7 +47,7 @@ exports.getAllResources = async (req, res) => {
         FROM Resources r
         ORDER BY r.Name
       `);
-    
+
     // For each resource, get their skills and allocations
     const resources = await Promise.all(result.recordset.map(async resource => {
       // Check if ProficiencyLevel column exists in ResourceSkills table
@@ -79,7 +79,7 @@ exports.getAllResources = async (req, res) => {
       const skillsResult = await pool.request()
         .input('resourceId', sql.Int, resource.ResourceID)
         .query(skillsQuery);
-      
+
       // Get allocations - Modified to get ALL allocations with financial data
       const allocationsResult = await pool.request()
         .input('resourceId', sql.Int, resource.ResourceID)
@@ -104,7 +104,7 @@ exports.getAllResources = async (req, res) => {
           AND a.EndDate >= GETDATE()
           ORDER BY a.EndDate ASC
         `);
-      
+
       // Format the response
       const formattedResource = {
         id: resource.ResourceID,
@@ -117,6 +117,7 @@ exports.getAllResources = async (req, res) => {
         billableRate: resource.BillableRate,
         currency: resource.Currency || 'USD',
         costCenter: resource.CostCenter,
+        systemRole: resource.SystemRole,
         skills: formatSkills(skillsResult.recordset),
         // Include ALL allocations as an array with financial data
         allocations: allocationsResult.recordset.map(alloc => ({
@@ -138,7 +139,7 @@ exports.getAllResources = async (req, res) => {
           billingType: alloc.BillingType || 'Hourly'
         }))
       };
-      
+
       // For backwards compatibility - include the first allocation as 'allocation'
       if (allocationsResult.recordset.length > 0) {
         const primaryAlloc = allocationsResult.recordset[0];
@@ -157,10 +158,10 @@ exports.getAllResources = async (req, res) => {
       } else {
         formattedResource.allocation = null;
       }
-      
+
       return formattedResource;
     }));
-    
+
     res.json(resources);
   } catch (err) {
     console.error('Error getting resources:', err);
@@ -191,7 +192,7 @@ exports.getResourceById = async (req, res) => {
     }
 
     const pool = await poolPromise;
-    
+
     // Query resource with financial info
     const result = await pool.request()
       .input('resourceId', sql.Int, id)
@@ -210,13 +211,13 @@ exports.getResourceById = async (req, res) => {
         FROM Resources r
         WHERE r.ResourceID = @resourceId
       `);
-    
+
     if (result.recordset.length === 0) {
       return res.status(404).json({ message: 'Resource not found' });
     }
-    
+
     const resource = result.recordset[0];
-    
+
     // Get skills
     const skillsResult = await pool.request()
       .input('resourceId', sql.Int, resource.ResourceID)
@@ -226,7 +227,7 @@ exports.getResourceById = async (req, res) => {
         INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
         WHERE rs.ResourceID = @resourceId
       `);
-    
+
     // Get allocations with financial data
     const allocationsResult = await pool.request()
       .input('resourceId', sql.Int, resource.ResourceID)
@@ -251,7 +252,7 @@ exports.getResourceById = async (req, res) => {
         AND a.EndDate >= GETDATE()
         ORDER BY a.EndDate ASC
       `);
-    
+
     // Try to get time entries if the table exists
     let timeEntriesResult = { recordset: [] };
     try {
@@ -275,7 +276,7 @@ exports.getResourceById = async (req, res) => {
     } catch (err) {
       console.log('Time entries table not available or error:', err.message);
     }
-    
+
     // Format the response
     const formattedResource = {
       id: resource.ResourceID,
@@ -288,6 +289,7 @@ exports.getResourceById = async (req, res) => {
       billableRate: resource.BillableRate,
       currency: resource.Currency || 'USD',
       costCenter: resource.CostCenter,
+      systemRole: resource.SystemRole,
       skills: formatSkills(skillsResult.recordset),
       // Include ALL allocations as an array with financial data
       allocations: allocationsResult.recordset.map(alloc => ({
@@ -320,7 +322,7 @@ exports.getResourceById = async (req, res) => {
         status: entry.Status
       }))
     };
-    
+
     // For backwards compatibility - include the first allocation as 'allocation'
     if (allocationsResult.recordset.length > 0) {
       const primaryAlloc = allocationsResult.recordset[0];
@@ -339,7 +341,7 @@ exports.getResourceById = async (req, res) => {
     } else {
       formattedResource.allocation = null;
     }
-    
+
     // Add financial summary
     const financialSummaryResult = await pool.request()
       .input('resourceId', sql.Int, resource.ResourceID)
@@ -357,7 +359,7 @@ exports.getResourceById = async (req, res) => {
         FROM Allocations a
         WHERE a.ResourceID = @resourceId
       `);
-    
+
     if (financialSummaryResult.recordset.length > 0) {
       formattedResource.financialSummary = {
         totalAllocatedHours: financialSummaryResult.recordset[0].TotalAllocatedHours || 0,
@@ -367,7 +369,7 @@ exports.getResourceById = async (req, res) => {
         profitMargin: financialSummaryResult.recordset[0].ProfitMargin || 0
       };
     }
-    
+
     res.json(formattedResource);
   } catch (err) {
     console.error('Error getting resource:', err);
@@ -390,32 +392,33 @@ exports.createResource = async (req, res) => {
     }
 
     const pool = await poolPromise;
-    const { 
-      name, 
-      roleId, 
+    const {
+      name,
+      roleId,
       role, // Support direct role name
-      email, 
-      phone, 
-      skills, 
-      hourlyRate, 
-      billableRate, 
-      currency, 
-      costCenter 
+      email,
+      phone,
+      skills,
+      hourlyRate,
+      billableRate,
+      currency,
+      costCenter,
+      systemRole
     } = req.body;
-    
+
     // Validate required fields - only name is required
     if (!name) {
       return res.status(400).json({ message: 'Name is required' });
     }
-    
+
     // Start a transaction
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
-    
+
     try {
       let roleName = null;
       let roleIdToUse = null;
-      
+
       // If roleId is provided, get the role name
       if (roleId) {
         roleIdToUse = roleId;
@@ -426,7 +429,7 @@ exports.createResource = async (req, res) => {
             FROM Roles
             WHERE RoleID = @roleId
           `);
-        
+
         if (roleResult.recordset.length > 0) {
           roleName = roleResult.recordset[0].Name;
         }
@@ -435,7 +438,7 @@ exports.createResource = async (req, res) => {
       else if (role) {
         roleName = role;
       }
-      
+
       // Insert resource with financial data
       const resourceResult = await transaction.request()
         .input('name', sql.NVarChar, name)
@@ -447,14 +450,15 @@ exports.createResource = async (req, res) => {
         .input('billableRate', sql.Decimal(10, 2), billableRate || null)
         .input('currency', sql.NVarChar, currency || 'USD')
         .input('costCenter', sql.NVarChar, costCenter || null)
+        .input('systemRole', sql.NVarChar, systemRole || 'User')
         .query(`
-          INSERT INTO Resources (Name, RoleID, Role, Email, Phone, HourlyRate, BillableRate, Currency, CostCenter)
+          INSERT INTO Resources (Name, RoleID, Role, Email, Phone, HourlyRate, BillableRate, Currency, CostCenter, SystemRole)
           OUTPUT INSERTED.ResourceID
-          VALUES (@name, @roleId, @roleName, @email, @phone, @hourlyRate, @billableRate, @currency, @costCenter)
+          VALUES (@name, @roleId, @roleName, @email, @phone, @hourlyRate, @billableRate, @currency, @costCenter, @systemRole)
         `);
-      
+
       const resourceId = resourceResult.recordset[0].ResourceID;
-      
+
       // Process skills with proficiency levels
       if (skills && skills.length > 0) {
         for (const skill of skills) {
@@ -512,10 +516,10 @@ exports.createResource = async (req, res) => {
             `);
         }
       }
-      
+
       // Commit transaction
       await transaction.commit();
-      
+
       // Return the created resource with the role info and financial data
       const result = await pool.request()
         .input('resourceId', sql.Int, resourceId)
@@ -536,7 +540,7 @@ exports.createResource = async (req, res) => {
           LEFT JOIN Roles ro ON r.RoleID = ro.RoleID
           WHERE r.ResourceID = @resourceId
         `);
-      
+
       // Check if ProficiencyLevel column exists in ResourceSkills table
       let hasProficiencyLevel = true;
       try {
@@ -566,7 +570,7 @@ exports.createResource = async (req, res) => {
       const skillsResult = await pool.request()
         .input('resourceId', sql.Int, resourceId)
         .query(skillsQuery);
-      
+
       // Format the response
       const resource = result.recordset[0];
       const formattedResource = {
@@ -584,7 +588,7 @@ exports.createResource = async (req, res) => {
         skills: formatSkills(skillsResult.recordset),
         allocation: null
       };
-      
+
       res.status(201).json(formattedResource);
     } catch (err) {
       // Rollback transaction on error
@@ -620,28 +624,29 @@ exports.updateResource = async (req, res) => {
     }
 
     const pool = await poolPromise;
-    const { 
-      name, 
-      roleId, 
+    const {
+      name,
+      roleId,
       role, // Support direct role name
-      email, 
-      phone, 
-      skills, 
-      hourlyRate, 
-      billableRate, 
-      currency, 
-      costCenter 
+      email,
+      phone,
+      skills,
+      hourlyRate,
+      billableRate,
+      currency,
+      costCenter,
+      systemRole
     } = req.body;
-    
+
     // Validate required fields - only name is required
     if (!name) {
       return res.status(400).json({ message: 'Name is required' });
     }
-    
+
     // Start a transaction
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
-    
+
     try {
       // Check if resource exists
       const checkResource = await transaction.request()
@@ -649,15 +654,15 @@ exports.updateResource = async (req, res) => {
         .query(`
           SELECT ResourceID FROM Resources WHERE ResourceID = @resourceId
         `);
-      
+
       if (checkResource.recordset.length === 0) {
         await transaction.rollback();
         return res.status(404).json({ message: 'Resource not found' });
       }
-      
+
       let roleName = null;
       let roleIdToUse = null;
-      
+
       // If roleId is provided, get the role name
       if (roleId) {
         roleIdToUse = roleId;
@@ -668,7 +673,7 @@ exports.updateResource = async (req, res) => {
             FROM Roles
             WHERE RoleID = @roleId
           `);
-        
+
         if (roleResult.recordset.length > 0) {
           roleName = roleResult.recordset[0].Name;
         }
@@ -677,7 +682,7 @@ exports.updateResource = async (req, res) => {
       else if (role) {
         roleName = role;
       }
-      
+
       // Update resource with roleId, role text, and financial data
       const updateQuery = `
         UPDATE Resources
@@ -690,10 +695,11 @@ exports.updateResource = async (req, res) => {
             BillableRate = @billableRate,
             Currency = @currency,
             CostCenter = @costCenter,
+            SystemRole = @systemRole,
             UpdatedAt = @updatedAt
         WHERE ResourceID = @resourceId
       `;
-      
+
       const request = transaction.request()
         .input('resourceId', sql.Int, id)
         .input('name', sql.NVarChar, name)
@@ -703,18 +709,19 @@ exports.updateResource = async (req, res) => {
         .input('billableRate', sql.Decimal(10, 2), billableRate || null)
         .input('currency', sql.NVarChar, currency || 'USD')
         .input('costCenter', sql.NVarChar, costCenter || null)
+        .input('systemRole', sql.NVarChar, systemRole || 'User')
         .input('updatedAt', sql.DateTime2, new Date());
-        
+
       if (roleIdToUse !== null) {
         request.input('roleId', sql.Int, roleIdToUse);
       }
-      
+
       if (roleName !== null) {
         request.input('roleName', sql.NVarChar, roleName);
       }
-      
+
       await request.query(updateQuery);
-      
+
       // Process skills if provided
       if (skills !== undefined) {
         // Remove all existing skills
@@ -724,7 +731,7 @@ exports.updateResource = async (req, res) => {
             DELETE FROM ResourceSkills
             WHERE ResourceID = @resourceId
           `);
-        
+
         // Add new skills with proficiency levels
         if (skills && skills.length > 0) {
           for (const skill of skills) {
@@ -791,7 +798,7 @@ exports.updateResource = async (req, res) => {
           }
         }
       }
-      
+
       // Update allocations with new resource rates if applicable
       if (hourlyRate !== undefined || billableRate !== undefined) {
         await transaction.request()
@@ -810,10 +817,10 @@ exports.updateResource = async (req, res) => {
               AND (HourlyRate IS NULL OR BillableRate IS NULL)
           `);
       }
-      
+
       // Commit transaction
       await transaction.commit();
-      
+
       // Return the updated resource
       const result = await pool.request()
         .input('resourceId', sql.Int, id)
@@ -834,7 +841,7 @@ exports.updateResource = async (req, res) => {
           LEFT JOIN Roles ro ON r.RoleID = ro.RoleID
           WHERE r.ResourceID = @resourceId
         `);
-      
+
       // Get skills with proficiency levels
       const skillsResult = await pool.request()
         .input('resourceId', sql.Int, id)
@@ -844,7 +851,7 @@ exports.updateResource = async (req, res) => {
           INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
           WHERE rs.ResourceID = @resourceId
         `);
-      
+
       // Get allocation
       const allocationResult = await pool.request()
         .input('resourceId', sql.Int, id)
@@ -869,7 +876,7 @@ exports.updateResource = async (req, res) => {
           AND a.EndDate >= GETDATE()
           ORDER BY a.EndDate ASC
         `);
-      
+
       // Format the response
       const resource = result.recordset[0];
       const formattedResource = {
@@ -910,7 +917,7 @@ exports.updateResource = async (req, res) => {
           billingType: alloc.BillingType || 'Hourly'
         }))
       };
-      
+
       res.json(formattedResource);
     } catch (err) {
       // Rollback transaction on error
@@ -948,7 +955,7 @@ exports.deleteResource = async (req, res) => {
     }
 
     const pool = await poolPromise;
-    
+
     // Check if resource exists
     const checkResource = await pool.request()
       .input('resourceId', sql.Int, id)
@@ -1002,20 +1009,20 @@ exports.bulkCreateResources = async (req, res) => {
     if (!Array.isArray(resources) || resources.length === 0) {
       return res.status(400).json({ message: 'Valid resources array is required' });
     }
-    
+
     const pool = await poolPromise;
     const createdResources = [];
-    
+
     for (const resource of resources) {
       // Validate required fields
       if (!resource.name || !resource.roleId) {
         continue; // Skip invalid resources
       }
-      
+
       // Create resource using existing logic but in a loop
       // ... [similar to createResource but in a loop]
     }
-    
+
     res.status(201).json(createdResources);
   } catch (err) {
     console.error('Error bulk creating resources:', err);

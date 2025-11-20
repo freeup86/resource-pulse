@@ -11,23 +11,23 @@ const JWT_SECRET = process.env.JWT_SECRET || 'resource-pulse-secret-key';
 const authenticate = (req, res, next) => {
   // Get token from authorization header
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader) {
     return res.status(401).json({ message: 'Authentication required. No token provided.' });
   }
-  
+
   // Check if the format is Bearer {token}
   const parts = authHeader.split(' ');
   if (parts.length !== 2 || parts[0] !== 'Bearer') {
     return res.status(401).json({ message: 'Authentication failed. Token format is invalid.' });
   }
-  
+
   const token = parts[1];
-  
+
   try {
     // Verify the token
     const decoded = jwt.verify(token, JWT_SECRET);
-    
+
     // Attach user info to request object
     // Force userId to be a number to prevent SQL parameter validation errors
     if (decoded && decoded.userId) {
@@ -38,16 +38,16 @@ const authenticate = (req, res, next) => {
       }
     }
     req.user = decoded;
-    
+
     // Continue to the next middleware or route handler
     next();
   } catch (err) {
     console.error('Token verification error:', err.message);
-    
+
     if (err.name === 'TokenExpiredError') {
       return res.status(401).json({ message: 'Authentication failed. Token has expired.' });
     }
-    
+
     return res.status(401).json({ message: 'Authentication failed. Invalid token.' });
   }
 };
@@ -60,11 +60,11 @@ const requireAdmin = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ message: 'Authentication required' });
   }
-  
+
   if (req.user.role !== 'admin') {
     return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
   }
-  
+
   next();
 };
 
@@ -76,10 +76,10 @@ const requireActiveUser = async (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ message: 'Authentication required' });
   }
-  
+
   try {
     const pool = await poolPromise;
-    
+
     const result = await pool.request()
       .input('userId', sql.Int, req.user.userId)
       .query(`
@@ -87,11 +87,11 @@ const requireActiveUser = async (req, res, next) => {
         FROM Users 
         WHERE UserID = @userId
       `);
-    
+
     if (result.recordset.length === 0 || !result.recordset[0].IsActive) {
       return res.status(403).json({ message: 'Your account is inactive or has been disabled.' });
     }
-    
+
     next();
   } catch (err) {
     console.error('Error checking user status:', err);
@@ -99,8 +99,34 @@ const requireActiveUser = async (req, res, next) => {
   }
 };
 
+/**
+ * Middleware to check if user has one of the allowed roles
+ * Must be used after authenticate middleware
+ * @param {Array<string>} allowedRoles - List of allowed roles (e.g. ['Admin', 'ProjectManager'])
+ */
+const checkRole = (allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Normalize roles to lowercase for comparison
+    const userRole = (req.user.role || 'User').toLowerCase();
+    const allowed = allowedRoles.map(r => r.toLowerCase());
+
+    if (allowed.includes(userRole) || userRole === 'admin') {
+      next();
+    } else {
+      return res.status(403).json({
+        message: `Access denied. Required role: ${allowedRoles.join(' or ')}`
+      });
+    }
+  };
+};
+
 module.exports = {
   authenticate,
   requireAdmin,
-  requireActiveUser
+  requireActiveUser,
+  checkRole
 };

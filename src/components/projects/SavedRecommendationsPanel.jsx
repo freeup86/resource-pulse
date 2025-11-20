@@ -6,14 +6,23 @@ import LoadingSpinner from '../common/LoadingSpinner';
 /**
  * Component for displaying and managing saved skill recommendations for a project
  */
-const SavedRecommendationsPanel = ({ projectId, projectName, onRecommendationDeleted }) => {
-  const [recommendations, setRecommendations] = useState([]);
-  const [loading, setLoading] = useState(true);
+const SavedRecommendationsPanel = ({ projectId, projectName, recommendations: propRecommendations, refreshTrigger, onRecommendationDeleted }) => {
+  const [recommendations, setRecommendations] = useState(propRecommendations || []);
+  const [loading, setLoading] = useState(!propRecommendations);
   const [error, setError] = useState(null);
 
-  // Fetch saved recommendations when component mounts or projectId changes
+  // Update recommendations when prop changes
   useEffect(() => {
-    if (projectId) {
+    if (propRecommendations) {
+      console.log('SavedRecommendationsPanel received new recommendations:', propRecommendations);
+      setRecommendations(propRecommendations);
+      setLoading(false);
+    }
+  }, [propRecommendations, refreshTrigger]);
+
+  // Fetch saved recommendations when component mounts or projectId changes (only if no prop recommendations)
+  useEffect(() => {
+    if (projectId && !propRecommendations) {
       fetchRecommendations();
     }
   }, [projectId]);
@@ -38,17 +47,17 @@ const SavedRecommendationsPanel = ({ projectId, projectName, onRecommendationDel
     try {
       setLoading(true);
       await deleteRecommendation(recommendationId);
-      
+
       // Remove the deleted recommendation from the state
-      setRecommendations(prevRecs => 
+      setRecommendations(prevRecs =>
         prevRecs.filter(rec => rec.id !== recommendationId)
       );
-      
+
       // Notify parent component if needed
       if (onRecommendationDeleted) {
         onRecommendationDeleted(recommendationId);
       }
-      
+
     } catch (err) {
       console.error('Error deleting recommendation:', err);
       setError('Failed to delete recommendation');
@@ -63,9 +72,7 @@ const SavedRecommendationsPanel = ({ projectId, projectName, onRecommendationDel
   }
 
   return (
-    <div className="mt-6 p-4 bg-white rounded-lg shadow">
-      <h2 className="text-xl font-bold text-gray-800 mb-4">Saved Skill Recommendations</h2>
-      
+    <div className="mt-6">
       {loading ? (
         <div className="flex justify-center items-center p-8">
           <LoadingSpinner />
@@ -77,11 +84,18 @@ const SavedRecommendationsPanel = ({ projectId, projectName, onRecommendationDel
       ) : (
         <div>
           {recommendations.length > 0 ? (
-            <AiRecommendationDisplay 
+            <AiRecommendationDisplay
               recommendations={recommendations}
               projectName={projectName}
-              onSave={() => {}} // No save action needed for already saved items
-              onCancel={() => {}} // No cancel action needed
+              onSave={(rec) => {
+                // For saved recommendations, don't do anything on save
+                console.log('Save clicked on already saved recommendation:', rec);
+                return Promise.resolve();
+              }}
+              onCancel={() => {
+                // No cancel action needed for saved recommendations
+                console.log('Close clicked on saved recommendations panel');
+              }}
               onDelete={handleDelete}
               showDelete={true}
             />

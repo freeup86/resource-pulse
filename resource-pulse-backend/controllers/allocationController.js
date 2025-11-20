@@ -11,7 +11,7 @@ const getMaxUtilizationPercentage = async (pool) => {
         FROM SystemSettings 
         WHERE SettingKey = 'maxUtilizationPercentage'
       `);
-    
+
     if (result.recordset.length > 0) {
       return parseInt(result.recordset[0].SettingValue) || 100;
     }
@@ -31,9 +31,9 @@ const getAllowOverallocation = async (pool) => {
         FROM SystemSettings 
         WHERE SettingKey = 'allowOverallocation'
       `);
-    
+
     console.log('getAllowOverallocation query result:', result.recordset);
-    
+
     if (result.recordset.length > 0) {
       // Convert string 'true' or 'false' to boolean
       const value = result.recordset[0].SettingValue === 'true' || result.recordset[0].SettingValue === '1';
@@ -103,7 +103,7 @@ const updateAllocation = async (req, res) => {
         throw error;
       }
     }
-    
+
     // Validate input parameters
     if (!resourceId) {
       return res.status(400).json({ message: 'Resource ID is required' });
@@ -124,20 +124,20 @@ const updateAllocation = async (req, res) => {
     if (utilization === undefined || utilization === null) {
       return res.status(400).json({ message: 'Utilization is required' });
     }
-    
+
     // Validate utilization
     if (utilization < 1 || utilization > 150) { // Increased upper limit to 150 as a safeguard
-      return res.status(400).json({ 
-        message: 'Utilization must be between 1 and 150' 
+      return res.status(400).json({
+        message: 'Utilization must be between 1 and 150'
       });
     }
-    
+
     const pool = await poolPromise;
-    
+
     // Get the max utilization percentage and overallocation settings
     const maxUtilizationPercentage = await getMaxUtilizationPercentage(pool);
     const allowOverallocation = await getAllowOverallocation(pool);
-    
+
     console.log('Allocation validation settings:', {
       maxUtilizationPercentage,
       allowOverallocation,
@@ -146,11 +146,11 @@ const updateAllocation = async (req, res) => {
       startDate,
       endDate
     });
-    
+
     // Start a transaction
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
-    
+
     try {
       // Check if resource exists and get hourly rate if not provided
       const resourceCheck = await transaction.request()
@@ -163,37 +163,37 @@ const updateAllocation = async (req, res) => {
           FROM Resources 
           WHERE ResourceID = @resourceId
         `);
-      
+
       if (resourceCheck.recordset.length === 0) {
         await transaction.rollback();
         return res.status(404).json({ message: 'Resource not found' });
       }
-      
+
       // Get resource hourly and billable rates if not provided
       const resourceHourlyRate = hourlyRate || resourceCheck.recordset[0].HourlyRate;
       const resourceBillableRate = billableRate || resourceCheck.recordset[0].BillableRate;
-      
+
       // Check if project exists
       const projectCheck = await transaction.request()
         .input('projectId', sql.Int, projectId)
         .query(`
           SELECT ProjectID FROM Projects WHERE ProjectID = @projectId
         `);
-      
+
       if (projectCheck.recordset.length === 0) {
         await transaction.rollback();
         return res.status(404).json({ message: 'Project not found' });
       }
-      
+
       // Validate start and end dates
       const startDateObj = new Date(startDate);
       const endDateObj = new Date(endDate);
-      
+
       if (startDateObj > endDateObj) {
         await transaction.rollback();
         return res.status(400).json({ message: 'Start date must be before or equal to end date' });
       }
-      
+
       // Check utilization constraint against system setting
       const utilizationCheck = await transaction.request()
         .input('resourceId', sql.Int, resourceId)
@@ -209,14 +209,14 @@ const updateAllocation = async (req, res) => {
             (StartDate <= @endDate AND EndDate >= @startDate)
           )
         `);
-      
+
       const existingUtilization = utilizationCheck.recordset[0].TotalUtilization || 0;
-      
+
       // Check if we need to enforce utilization limit
       // If overallocation is not allowed, limit to 100%
       // If overallocation is allowed, use the configured max utilization percentage
       const utilizationLimit = allowOverallocation ? maxUtilizationPercentage : 100;
-      
+
       console.log('Utilization validation:', {
         existingUtilization,
         newUtilization: utilization,
@@ -225,17 +225,17 @@ const updateAllocation = async (req, res) => {
         allowOverallocation,
         maxUtilizationPercentage
       });
-      
+
       if (existingUtilization + utilization > utilizationLimit) {
         await transaction.rollback();
         console.log('Allocation rejected due to utilization limit exceeded');
-        return res.status(400).json({ 
-          message: `This allocation would exceed ${utilizationLimit}% utilization. Current utilization in this period: ${existingUtilization}%. Overallocation ${allowOverallocation ? 'is' : 'is not'} allowed.` 
+        return res.status(400).json({
+          message: `This allocation would exceed ${utilizationLimit}% utilization. Current utilization in this period: ${existingUtilization}%. Overallocation ${allowOverallocation ? 'is' : 'is not'} allowed.`
         });
       }
-      
+
       // Calculate financial metrics
-      
+
       // Calculate workdays between dates (excluding weekends)
       const daysDiff = await transaction.request()
         .input('startDate', sql.Date, startDateObj)
@@ -246,19 +246,19 @@ const updateAllocation = async (req, res) => {
             DATEDIFF(day, @startDate, @endDate) + 1 - 
             (2 * DATEDIFF(week, @startDate, @endDate)) AS WorkDays
         `);
-      
+
       const workDays = daysDiff.recordset[0].WorkDays;
-      
+
       // Calculate total allocation hours (8 hours per workday * utilization percentage)
       const calculatedTotalHours = workDays * 8 * (utilization / 100);
       const allocationTotalHours = totalHours || calculatedTotalHours;
-      
+
       // Calculate financial amounts
       const allocationIsBillable = isBillable === undefined ? true : isBillable;
       const totalCost = resourceHourlyRate ? resourceHourlyRate * allocationTotalHours : null;
-      const billableAmount = allocationIsBillable && resourceBillableRate ? 
+      const billableAmount = allocationIsBillable && resourceBillableRate ?
         resourceBillableRate * allocationTotalHours : null;
-      
+
       // Check for existing allocation to this project
       const existingAllocation = await transaction.request()
         .input('resourceId', sql.Int, resourceId)
@@ -270,7 +270,7 @@ const updateAllocation = async (req, res) => {
           AND ProjectID = @projectId
           AND EndDate >= GETDATE()
         `);
-      
+
       if (existingAllocation.recordset.length > 0) {
         // Update existing allocation
         await transaction.request()
@@ -286,6 +286,7 @@ const updateAllocation = async (req, res) => {
           .input('billableAmount', sql.Decimal(14, 2), billableAmount)
           .input('isBillable', sql.Bit, allocationIsBillable)
           .input('billingType', sql.NVarChar(50), billingType || 'Hourly')
+          .input('bookingStatus', sql.NVarChar(50), req.body.bookingStatus || 'Hard')
           .input('updatedAt', sql.DateTime2, new Date())
           .query(`
             UPDATE Allocations
@@ -299,6 +300,7 @@ const updateAllocation = async (req, res) => {
                 BillableAmount = @billableAmount,
                 IsBillable = @isBillable,
                 BillingType = @billingType,
+                BookingStatus = @bookingStatus,
                 UpdatedAt = @updatedAt
             WHERE ResourceID = @resourceId
             AND ProjectID = @projectId
@@ -319,6 +321,7 @@ const updateAllocation = async (req, res) => {
           .input('billableAmount', sql.Decimal(14, 2), billableAmount)
           .input('isBillable', sql.Bit, allocationIsBillable)
           .input('billingType', sql.NVarChar(50), billingType || 'Hourly')
+          .input('bookingStatus', sql.NVarChar(50), req.body.bookingStatus || 'Hard')
           .query(`
             INSERT INTO Allocations (
               ResourceID, 
@@ -332,7 +335,8 @@ const updateAllocation = async (req, res) => {
               TotalCost,
               BillableAmount,
               IsBillable,
-              BillingType
+              BillingType,
+              BookingStatus
             )
             VALUES (
               @resourceId, 
@@ -346,11 +350,12 @@ const updateAllocation = async (req, res) => {
               @totalCost,
               @billableAmount,
               @isBillable,
-              @billingType
+              @billingType,
+              @bookingStatus
             )
           `);
       }
-      
+
       try {
         try {
           // Only pass the parameters that the stored procedure expects
@@ -484,7 +489,7 @@ const updateAllocation = async (req, res) => {
 
         throw new Error(`Transaction commit failed: ${commitError.message}`);
       }
-      
+
       // Fetch updated allocations for this resource
       const result = await pool.request()
         .input('resourceId', sql.Int, resourceId)
@@ -511,7 +516,7 @@ const updateAllocation = async (req, res) => {
           WHERE a.ResourceID = @resourceId
           AND a.EndDate >= GETDATE()
         `);
-      
+
       const allocations = result.recordset.map(allocation => ({
         id: allocation.AllocationID,
         resourceId: allocation.ResourceID,
@@ -528,7 +533,7 @@ const updateAllocation = async (req, res) => {
         isBillable: allocation.IsBillable,
         billingType: allocation.BillingType
       }));
-      
+
       res.json(allocations);
     } catch (err) {
       // Rollback transaction on error
@@ -651,7 +656,7 @@ const getResourceAllocations = async (req, res) => {
     }
 
     const pool = await poolPromise;
-    
+
     // Check if resource exists
     const resourceCheck = await pool.request()
       .input('resourceId', sql.Int, resourceId)
@@ -666,13 +671,13 @@ const getResourceAllocations = async (req, res) => {
         FROM Resources 
         WHERE ResourceID = @resourceId
       `);
-    
+
     if (resourceCheck.recordset.length === 0) {
       return res.status(404).json({ message: 'Resource not found' });
     }
-    
+
     const resource = resourceCheck.recordset[0];
-    
+
     // Get all allocations for this resource with financial data
     const result = await pool.request()
       .input('resourceId', sql.Int, resourceId)
@@ -701,7 +706,7 @@ const getResourceAllocations = async (req, res) => {
         AND a.EndDate >= GETDATE()
         ORDER BY a.StartDate
       `);
-    
+
     // Calculate total financial metrics for this resource
     const financialsResult = await pool.request()
       .input('resourceId', sql.Int, resourceId)
@@ -715,9 +720,9 @@ const getResourceAllocations = async (req, res) => {
         WHERE ResourceID = @resourceId
         AND EndDate >= GETDATE()
       `);
-    
+
     const financialSummary = financialsResult.recordset[0];
-    
+
     // Get current billable utilization percentage
     const utilizationResult = await pool.request()
       .input('resourceId', sql.Int, resourceId)
@@ -729,12 +734,12 @@ const getResourceAllocations = async (req, res) => {
         WHERE ResourceID = @resourceId
         AND GETDATE() BETWEEN StartDate AND EndDate
       `);
-    
+
     const utilization = utilizationResult.recordset[0];
-    const billableUtilizationPercentage = utilization.TotalUtilization > 0 
-      ? (utilization.BillableUtilization / utilization.TotalUtilization) * 100 
+    const billableUtilizationPercentage = utilization.TotalUtilization > 0
+      ? (utilization.BillableUtilization / utilization.TotalUtilization) * 100
       : 0;
-    
+
     const allocations = result.recordset.map(allocation => ({
       id: allocation.AllocationID,
       resource: {
@@ -760,7 +765,7 @@ const getResourceAllocations = async (req, res) => {
         profit: allocation.BillableAmount - allocation.TotalCost
       }
     }));
-    
+
     res.json({
       resource: {
         id: resource.ResourceID,
@@ -806,12 +811,12 @@ const getResourcesEndingSoon = async (req, res) => {
     }
 
     const pool = await poolPromise;
-    
+
     // Calculate the date threshold
     const today = new Date();
     const thresholdDate = new Date();
     thresholdDate.setDate(today.getDate() + daysThreshold);
-    
+
     // Query resources ending soon
     const result = await pool.request()
       .input('today', sql.Date, today)
@@ -834,7 +839,7 @@ const getResourcesEndingSoon = async (req, res) => {
         AND a.EndDate <= @thresholdDate
         ORDER BY a.EndDate ASC
       `);
-    
+
     // Format the response
     const resources = await Promise.all(result.recordset.map(async resource => {
       // Get skills
@@ -846,7 +851,7 @@ const getResourcesEndingSoon = async (req, res) => {
           INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
           WHERE rs.ResourceID = @resourceId
         `);
-      
+
       return {
         id: resource.ResourceID,
         name: resource.Name,
@@ -862,7 +867,7 @@ const getResourcesEndingSoon = async (req, res) => {
         }
       };
     }));
-    
+
     res.json(resources);
   } catch (err) {
     console.error('Error getting resources ending soon:', err);
@@ -875,49 +880,49 @@ const getResourcesEndingSoon = async (req, res) => {
 
 // Get resource matches
 const getResourceMatches = async (req, res) => {
- try {
-   const pool = await poolPromise;
-   const { projectId } = req.query;
-   
-   // If projectId is provided, get matches for specific project
-   if (projectId) {
-     const matches = await getMatchesForProject(pool, parseInt(projectId));
-     return res.json(matches);
-   }
-   
-   // Otherwise, get matches for all projects
-   const projectsResult = await pool.request()
-     .query(`
+  try {
+    const pool = await poolPromise;
+    const { projectId } = req.query;
+
+    // If projectId is provided, get matches for specific project
+    if (projectId) {
+      const matches = await getMatchesForProject(pool, parseInt(projectId));
+      return res.json(matches);
+    }
+
+    // Otherwise, get matches for all projects
+    const projectsResult = await pool.request()
+      .query(`
        SELECT ProjectID, Name, Client
        FROM Projects
        WHERE Status = 'Active'
      `);
-   
-   const allMatches = [];
-   
-   for (const project of projectsResult.recordset) {
-     try {
-       const matches = await getMatchesForProject(pool, project.ProjectID);
-       
-       if (matches.resources.length > 0) {
-         allMatches.push(matches);
-       }
-     } catch (projectMatchError) {
-       console.error(`Error getting matches for project ${project.Name}:`, projectMatchError);
-     }
-   }
-   
-   res.json(allMatches);
- } catch (err) {
-   console.error('Error getting resource matches:', err);
-   res.status(500).json({
-     message: 'Error retrieving resource matches',
-     error: process.env.NODE_ENV === 'production' ? {} : {
-       message: err.message,
-       stack: err.stack
-     }
-   });
- }
+
+    const allMatches = [];
+
+    for (const project of projectsResult.recordset) {
+      try {
+        const matches = await getMatchesForProject(pool, project.ProjectID);
+
+        if (matches.resources.length > 0) {
+          allMatches.push(matches);
+        }
+      } catch (projectMatchError) {
+        console.error(`Error getting matches for project ${project.Name}:`, projectMatchError);
+      }
+    }
+
+    res.json(allMatches);
+  } catch (err) {
+    console.error('Error getting resource matches:', err);
+    res.status(500).json({
+      message: 'Error retrieving resource matches',
+      error: process.env.NODE_ENV === 'production' ? {} : {
+        message: err.message,
+        stack: err.stack
+      }
+    });
+  }
 };
 
 // Remove an allocation
@@ -960,22 +965,22 @@ const removeAllocation = async (req, res) => {
         throw error;
       }
     }
-    
+
     // Validate required fields
     if (!resourceId) {
       return res.status(400).json({ message: 'Resource ID is required' });
     }
-    
+
     if (!allocationId) {
       return res.status(400).json({ message: 'Allocation ID is required' });
     }
-    
+
     const pool = await poolPromise;
-    
+
     // Start a transaction
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
-    
+
     try {
       // Validate resource exists
       const resourceCheck = await transaction.request()
@@ -983,12 +988,12 @@ const removeAllocation = async (req, res) => {
         .query(`
           SELECT ResourceID FROM Resources WHERE ResourceID = @resourceId
         `);
-      
+
       if (resourceCheck.recordset.length === 0) {
         await transaction.rollback();
         return res.status(404).json({ message: 'Resource not found' });
       }
-      
+
       // Validate allocation exists and get project ID
       const allocationCheck = await transaction.request()
         .input('allocationId', sql.Int, allocationId)
@@ -999,14 +1004,14 @@ const removeAllocation = async (req, res) => {
           WHERE AllocationID = @allocationId
           AND ResourceID = @resourceId
         `);
-      
+
       if (allocationCheck.recordset.length === 0) {
         await transaction.rollback();
         return res.status(404).json({ message: 'Allocation not found' });
       }
-      
+
       const projectId = allocationCheck.recordset[0].ProjectID;
-      
+
       // Delete allocation
       const result = await transaction.request()
         .input('allocationId', sql.Int, allocationId)
@@ -1014,7 +1019,7 @@ const removeAllocation = async (req, res) => {
           DELETE FROM Allocations
           WHERE AllocationID = @allocationId
         `);
-      
+
       // Recalculate project financial metrics
       if (projectId) {
         try {
@@ -1171,7 +1176,7 @@ const removeAllocation = async (req, res) => {
 
         throw new Error(`Transaction commit failed during removal: ${commitError.message}`);
       }
-      
+
       // Fetch remaining allocations for the resource with financial data
       const remainingAllocations = await pool.request()
         .input('resourceId', sql.Int, resourceId)
@@ -1198,7 +1203,7 @@ const removeAllocation = async (req, res) => {
           WHERE a.ResourceID = @resourceId
           AND a.EndDate >= GETDATE()
         `);
-      
+
       // Get updated project data
       let updatedProjectData = null;
       if (projectId) {
@@ -1218,7 +1223,7 @@ const removeAllocation = async (req, res) => {
             LEFT JOIN vw_ProjectFinancials vf ON p.ProjectID = vf.ProjectID
             WHERE p.ProjectID = @projectId
           `);
-        
+
         if (projectResult.recordset.length > 0) {
           updatedProjectData = {
             id: projectResult.recordset[0].ProjectID,
@@ -1234,7 +1239,7 @@ const removeAllocation = async (req, res) => {
           };
         }
       }
-      
+
       const allocations = remainingAllocations.recordset.map(allocation => ({
         id: allocation.AllocationID,
         resourceId: allocation.ResourceID,
@@ -1253,7 +1258,7 @@ const removeAllocation = async (req, res) => {
           billingType: allocation.BillingType
         }
       }));
-      
+
       // Calculate updated financial summary for resource
       const financialsResult = await pool.request()
         .input('resourceId', sql.Int, resourceId)
@@ -1266,10 +1271,10 @@ const removeAllocation = async (req, res) => {
           WHERE ResourceID = @resourceId
           AND EndDate >= GETDATE()
         `);
-      
+
       const financialSummary = financialsResult.recordset[0];
-      
-      res.json({ 
+
+      res.json({
         message: 'Allocation removed successfully',
         deletedCount: result.rowsAffected[0],
         remainingAllocations: allocations,
@@ -1339,13 +1344,13 @@ const getMatchesForProject = async (pool, projectId) => {
       FROM Projects p
       WHERE p.ProjectID = @projectId
     `);
-  
+
   if (projectResult.recordset.length === 0) {
     throw new Error(`Project with ID ${projectId} not found`);
   }
-  
+
   const project = projectResult.recordset[0];
-  
+
   // Get project required skills
   const skillsResult = await pool.request()
     .input('projectId', sql.Int, projectId)
@@ -1355,9 +1360,9 @@ const getMatchesForProject = async (pool, projectId) => {
       INNER JOIN ProjectSkills ps ON s.SkillID = ps.SkillID
       WHERE ps.ProjectID = @projectId
     `);
-  
+
   const requiredSkills = skillsResult.recordset.map(skill => skill.Name);
-  
+
   // Get project required roles
   const rolesResult = await pool.request()
     .input('projectId', sql.Int, projectId)
@@ -1367,13 +1372,13 @@ const getMatchesForProject = async (pool, projectId) => {
       INNER JOIN Roles r ON pr.RoleID = r.RoleID
       WHERE pr.ProjectID = @projectId
     `);
-  
+
   const requiredRoles = rolesResult.recordset.map(role => ({
     id: role.RoleID,
     name: role.Name,
     count: role.Count
   }));
-  
+
   // Calculate how many resources per role are already allocated
   const allocatedRolesResult = await pool.request()
     .input('projectId', sql.Int, projectId)
@@ -1385,16 +1390,16 @@ const getMatchesForProject = async (pool, projectId) => {
       WHERE a.ProjectID = @projectId
       GROUP BY r.RoleID
     `);
-  
+
   // Build allocated counts map
   const allocatedCounts = {};
   allocatedRolesResult.recordset.forEach(row => {
     allocatedCounts[row.RoleID] = row.AllocatedCount;
   });
-  
+
   // Get max utilization from settings
   const maxUtilization = await getMaxUtilizationPercentage(pool);
-  
+
   // Find resources with matching skills OR matching roles
   const matchingResourcesResult = await pool.request()
     .input('projectId', sql.Int, projectId)
@@ -1474,7 +1479,7 @@ const getMatchesForProject = async (pool, projectId) => {
           GETDATE() + 365
         )
     `);
-  
+
   // For each matching resource, calculate match score and get matching skills/roles
   const matchingResources = await Promise.all(
     matchingResourcesResult.recordset.map(async resource => {
@@ -1487,9 +1492,9 @@ const getMatchesForProject = async (pool, projectId) => {
           INNER JOIN ResourceSkills rs ON s.SkillID = rs.SkillID
           WHERE rs.ResourceID = @resourceId
         `);
-      
+
       const resourceSkills = resourceSkillsResult.recordset.map(skill => skill.Name);
-      
+
       // Get role info
       const roleResult = await pool.request()
         .input('roleId', sql.Int, resource.RoleID)
@@ -1498,12 +1503,12 @@ const getMatchesForProject = async (pool, projectId) => {
           FROM Roles
           WHERE RoleID = @roleId
         `);
-      
+
       const role = roleResult.recordset.length > 0 ? {
         id: roleResult.recordset[0].RoleID,
         name: roleResult.recordset[0].Name
       } : null;
-      
+
       // Get allocations for this resource
       const allocationsResult = await pool.request()
         .input('resourceId', sql.Int, resource.ResourceID)
@@ -1521,31 +1526,31 @@ const getMatchesForProject = async (pool, projectId) => {
           AND a.EndDate >= GETDATE()
           ORDER BY a.EndDate ASC
         `);
-      
+
       // Calculate matching skills
       const matchingSkills = resourceSkills.filter(skill => requiredSkills.includes(skill));
-      
+
       // Calculate if role matches
-      const roleMatches = requiredRoles.some(reqRole => 
+      const roleMatches = requiredRoles.some(reqRole =>
         resource.RoleID === reqRole.id
       );
-      
+
       // Get the matching role if any
       const matchingRole = requiredRoles.find(reqRole => resource.RoleID === reqRole.id);
-      
+
       // Check if the role is still needed (count not fulfilled)
-      const roleNeeded = matchingRole ? 
-        (allocatedCounts[matchingRole.id] || 0) < matchingRole.count : 
+      const roleNeeded = matchingRole ?
+        (allocatedCounts[matchingRole.id] || 0) < matchingRole.count :
         false;
-      
+
       // Calculate match score - higher weight to role matches (40%) and rest to skill matches (60%)
-      const skillMatchScore = requiredSkills.length > 0 ? 
+      const skillMatchScore = requiredSkills.length > 0 ?
         (matchingSkills.length / requiredSkills.length) * 60 : 0;
-      
+
       const roleMatchScore = roleMatches ? 40 : 0;
-      
+
       const totalMatchScore = skillMatchScore + roleMatchScore;
-      
+
       return {
         id: resource.ResourceID,
         name: resource.Name,
@@ -1575,17 +1580,17 @@ const getMatchesForProject = async (pool, projectId) => {
       };
     })
   );
-  
+
   // Sort by role needed first, then match score (descending)
   matchingResources.sort((a, b) => {
     // First sort by whether the role is needed
     if (a.roleNeeded && !b.roleNeeded) return -1;
     if (!a.roleNeeded && b.roleNeeded) return 1;
-    
+
     // Then by match score
     return b.matchScore - a.matchScore;
   });
-  
+
   // Calculate roles still needed
   const rolesNeeded = requiredRoles.map(role => {
     const allocated = allocatedCounts[role.id] || 0;
@@ -1595,7 +1600,7 @@ const getMatchesForProject = async (pool, projectId) => {
       needed: Math.max(0, role.count - allocated)
     };
   }).filter(role => role.needed > 0);
-  
+
   return {
     project: {
       id: project.ProjectID,
@@ -1613,7 +1618,7 @@ const getMatchesForProject = async (pool, projectId) => {
 const getExpiredAllocations = async (req, res) => {
   try {
     const pool = await poolPromise;
-    
+
     // Get expired allocations with resource and project details
     const result = await pool.request()
       .query(`
@@ -1635,7 +1640,7 @@ const getExpiredAllocations = async (req, res) => {
         WHERE a.EndDate < GETDATE()
         ORDER BY a.EndDate DESC
       `);
-    
+
     const expiredAllocations = result.recordset.map(alloc => ({
       id: alloc.AllocationID,
       resourceId: alloc.ResourceID,
@@ -1649,7 +1654,7 @@ const getExpiredAllocations = async (req, res) => {
       utilization: alloc.Utilization,
       daysExpired: alloc.DaysExpired
     }));
-    
+
     res.json(expiredAllocations);
   } catch (err) {
     console.error('Error getting expired allocations:', err);
@@ -1660,6 +1665,66 @@ const getExpiredAllocations = async (req, res) => {
   }
 };
 
+// Get capacity forecast for heatmap
+const getCapacityForecast = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const pool = await poolPromise;
+
+    // Default to next 12 weeks if not specified
+    const start = startDate ? new Date(startDate) : new Date();
+    const end = endDate ? new Date(endDate) : new Date(new Date().setDate(start.getDate() + 84));
+
+    // Get all resources and their capacity
+    const resourcesResult = await pool.request().query(`
+      SELECT ResourceID, Name, Role, CapacityHoursPerWeek 
+      FROM Resources
+      ORDER BY Name
+    `);
+
+    const resources = resourcesResult.recordset;
+
+    // Get all allocations in the range
+    const allocationsResult = await pool.request()
+      .input('startDate', sql.Date, start)
+      .input('endDate', sql.Date, end)
+      .query(`
+        SELECT 
+          a.ResourceID,
+          a.ProjectID,
+          p.Name as ProjectName,
+          a.StartDate,
+          a.EndDate,
+          a.Utilization,
+          a.BookingStatus
+        FROM Allocations a
+        JOIN Projects p ON a.ProjectID = p.ProjectID
+        WHERE a.EndDate >= @startDate AND a.StartDate <= @endDate
+      `);
+
+    const allocations = allocationsResult.recordset;
+
+    res.json({
+      resources: resources.map(r => ({
+        ...r,
+        CapacityHoursPerWeek: r.CapacityHoursPerWeek || 40
+      })),
+      allocations: allocations.map(a => ({
+        ...a,
+        BookingStatus: a.BookingStatus || 'Hard'
+      })),
+      range: {
+        start,
+        end
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting capacity forecast:', error);
+    res.status(500).json({ message: 'Server error getting capacity forecast' });
+  }
+};
+
 // Exports
 module.exports = {
   updateAllocation,
@@ -1667,5 +1732,6 @@ module.exports = {
   getResourcesEndingSoon,
   getResourceMatches,
   removeAllocation,
-  getExpiredAllocations
+  getExpiredAllocations,
+  getCapacityForecast
 };

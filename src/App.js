@@ -13,6 +13,7 @@ import AllocationsPage from './components/allocations/AllocationsPage';
 import EndingSoonPage from './components/allocations/EndingSoonPage';
 import MatchesPage from './components/matching/MatchesPage';
 import TimelinePage from './components/pages/TimelinePage';
+import ResourceManagerDashboard from './components/pages/ResourceManagerDashboard';
 import RolesPage from './components/admin/RolesPage';
 import SkillsPage from './components/admin/SkillsPage';
 import ImportPage from './components/admin/ImportPage';
@@ -108,6 +109,7 @@ function App() {
                         <Route path="/ai/documents" element={<DocumentProcessingPage />} />
                         <Route path="/ai/satisfaction" element={<ClientSatisfactionPage />} />
                         <Route path="/whatif" element={<WhatIfScenarioPage />} />
+                        <Route path="/resource-manager" element={<ResourceManagerDashboard />} />
                       </Routes>
                     </MainLayout>
                   </ProtectedRoute>

@@ -29,17 +29,17 @@ export const SettingsProvider = ({ children }) => {
       try {
         setLoading(true);
         const data = await settingsService.getSettings();
-        
+
         // Ensure boolean settings are properly parsed
         // This is important for settings like allowOverallocation
         const parsedData = {
           ...data,
-          allowOverallocation: typeof data.allowOverallocation === 'string' 
+          allowOverallocation: typeof data.allowOverallocation === 'string'
             ? data.allowOverallocation === 'true'
             : Boolean(data.allowOverallocation)
         };
-        
-        console.log('Settings loaded:', parsedData);
+
+        // console.log('Settings loaded:', parsedData);
         setSettings(parsedData);
         setError(null);
       } catch (err) {
@@ -84,8 +84,8 @@ export const SettingsProvider = ({ children }) => {
   };
 
   return (
-    <SettingsContext.Provider value={{ 
-      settings, 
+    <SettingsContext.Provider value={{
+      settings,
       loading,
       error,
       updateSettings,
